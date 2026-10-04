@@ -580,18 +580,19 @@ function rainTile(t, z, x, y) {
   const ready = rainCache.get(key);
   if (ready) { lastDrawn.set(lk, ready); return ready; }
   if (!rainBusy.has(key)) {
-    rainBusy.set(key, true);
-    renderRain(t, z, x, y).then(cv => {
+    const pr = renderRain(t, z, x, y).then(cv => {
       rainCache.set(key, cv);
       if (rainCache.size > 400) rainCache.delete(rainCache.keys().next().value);
       dirty = true;
     }).catch(() => { setStatus("Radar non raggiungibile, riprovo…"); })
       .finally(() => rainBusy.delete(key));
+    rainBusy.set(key, pr);
   }
   return lastDrawn.get(lk) || null;
 }
 
 // ---------------------------------------------------------------- disegno
+const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 5, 11);
 let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
 
 function setStatus(msg) {
@@ -624,7 +625,7 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#0E1A2B"; ctx.fillRect(0, 0, W, H);
   const bz = clamp(Math.round(view.zoom), 2, 14);
-  const rz = clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 5, 11);
+  const rz = rainZoom();
 
   drawLayer((x, y, sx, sy, w, h) => { ctx.drawImage(baseTile(bz, x, y), sx, sy, w, h); }, bz);
 
@@ -638,6 +639,7 @@ function draw() {
 
   drawPlaces();
   drawRoute();
+  watchFilm();
 
   if (here) {
     const n = worldSize(), [mx, my] = lonLatToNorm(here.lon, here.lat);
@@ -693,13 +695,51 @@ async function prefetch() {
         jobs.push(dataTile(t, x, y).catch(() => null));
   await Promise.all(jobs);
 }
+// Il film si prepara da solo in background (dati scaricati e forme già disegnate per tutte le foto
+// della zona che guardi), così quando premi il tasto parte subito.
+let prepared = "", preparing = null, prepSeen = "", prepTimer = null;
+const filmSignature = () => {
+  const z = rainZoom(), v = visibleTiles(z, 0);
+  return `${frames[frames.length - 1]}|${z}|${v.x0},${v.x1},${v.y0},${v.y1}`;
+};
+function prepareFilm() {
+  if (!frames.length) return Promise.resolve();
+  const sig = filmSignature();
+  if (prepared === sig) return Promise.resolve();
+  if (preparing && preparing.sig === sig) return preparing.p;
+  const p = (async () => {
+    await prefetch();
+    const z = rainZoom(), v = visibleTiles(z, 0);
+    if ((v.x1 - v.x0 + 1) * (v.y1 - v.y0 + 1) <= 32) {
+      for (const t of [...frames].reverse()) {
+        for (let ty = v.y0; ty <= v.y1; ty++) for (let tx = v.x0; tx <= v.x1; tx++) {
+          const wx = ((tx % v.tiles) + v.tiles) % v.tiles, key = t + "|" + z + "|" + wx + "|" + ty;
+          if (rainCache.has(key)) continue;
+          rainTile(t, z, wx, ty);
+          await rainBusy.get(key);
+          await new Promise(r => setTimeout(r, 0));   // lascia respirare lo schermo (telefoni lenti)
+        }
+      }
+    }
+    prepared = sig;
+  })().finally(() => { if (preparing && preparing.sig === sig) preparing = null; });
+  preparing = { sig, p };
+  return p;
+}
+function watchFilm() {   // chiamata a ogni disegno: se l'inquadratura cambia, si riprepara quando si ferma
+  if (!frames.length || playing) return;
+  const sig = filmSignature();
+  if (sig === prepSeen) return;
+  prepSeen = sig;
+  clearTimeout(prepTimer);
+  prepTimer = setTimeout(() => { prepareFilm().catch(() => {}); }, 1200);
+}
 function play(on) {
   playing = on;
   document.getElementById("playIcon").setAttribute("d", on ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4.5v15l13-7.5z");
   clearInterval(timer);
   if (!on) return;
-  setStatus("Carico il film…");
-  prefetch().then(() => {
+  const go = () => {
     setStatus("");
     if (!playing) return;
     if (cur >= frames.length - 1) showFrame(0);
@@ -707,7 +747,10 @@ function play(on) {
       if (cur >= frames.length - 1) { showFrame(0); return; }
       showFrame(cur + 1);
     }, 550);
-  });
+  };
+  if (prepared === filmSignature()) { go(); return; }
+  setStatus("Aggiorno il radar…");
+  prepareFilm().then(go, go);
 }
 playBtn.onclick = () => play(!playing);
 slider.oninput = () => { play(false); showFrame(+slider.value); };
