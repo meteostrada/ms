@@ -7,6 +7,7 @@
 <meta name="description" content="La pioggia e i temporali in Italia, ogni 5 minuti, con il disegno nitido di MeteoStrada.">
 <style>
 :root{
+  --pw:0px;
   --bg:#0F1420; --surface:#1A2233; --surface2:#232D42; --line:#ffffff22;
   --text:#F4F6FB; --text2:#9AA5BD; --info:#4FA3E3; --bolt:#FFE600; --ok:#3DBE6B;
 }
@@ -14,7 +15,7 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
   font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
   -webkit-tap-highlight-color:transparent}
-#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map{position:fixed;left:0;top:0;bottom:0;right:var(--pw);width:calc(100% - var(--pw));height:100%;display:block;touch-action:none;cursor:grab}
 #map:active{cursor:grabbing}
 .card{background:#1A2233e6;border:1px solid var(--line);border-radius:14px;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
@@ -61,8 +62,8 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 #tripView.compact .field,#tripView.compact #go{display:none}
 #tripView.compact #tripOut{max-height:36vh;margin-top:0}
 .rowbtns{display:flex;gap:8px;margin-top:6px}
-#bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom)) + 22px);
-  width:min(560px,calc(100% - 24px));padding:10px 14px;z-index:3;display:flex;align-items:center;gap:12px}
+#bar{position:fixed;left:calc((100% - var(--pw)) / 2);transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom)) + 22px);
+  width:min(560px,calc(100% - var(--pw) - 24px));padding:10px 14px;z-index:3;display:flex;align-items:center;gap:12px}
 #play{width:40px;height:40px;border-radius:50%;border:0;background:var(--info);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none}
 #play svg{width:18px;height:18px;fill:#fff}
 #timeBox{flex:1;min-width:0}
@@ -72,14 +73,54 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 #slider{width:100%;margin:6px 0 0;accent-color:var(--info);height:18px}
 #now{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer;flex:none}
 #now[disabled]{opacity:.4;cursor:default}
-#tools{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:3;display:flex;flex-direction:column;gap:8px}
+#tools{position:fixed;right:calc(var(--pw) + max(12px,env(safe-area-inset-right)));top:max(12px,env(safe-area-inset-top));z-index:3;display:flex;flex-direction:column;gap:8px}
 #tools button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:#1A2233e6;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center}
 #tools svg{width:20px;height:20px;fill:none;stroke:var(--text);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-#status{position:fixed;left:50%;transform:translateX(-50%);top:max(12px,env(safe-area-inset-top));z-index:3;
+#status{position:fixed;left:calc((100% - var(--pw)) / 2);transform:translateX(-50%);top:max(12px,env(safe-area-inset-top));z-index:3;
   padding:6px 12px;font-size:12px;color:var(--text2);display:none;white-space:nowrap}
-#credits{position:fixed;left:0;right:0;bottom:0;padding:3px 10px max(3px,env(safe-area-inset-bottom));z-index:3;
+#credits{position:fixed;left:0;right:var(--pw);bottom:0;padding:3px 10px max(3px,env(safe-area-inset-bottom));z-index:3;
   font-size:10.5px;color:var(--text2);background:#0F1420cc;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #credits a{color:var(--text2)}
+/* ---- pannello "L'app": a destra sui monitor grandi, a tutto schermo sui telefoni */
+#about{position:fixed;top:0;right:0;bottom:0;width:380px;z-index:7;background:linear-gradient(180deg,#141B2B,#0F1420 38%);
+  border-left:1px solid var(--line);overflow-y:auto;overscroll-behavior:contain;display:none;
+  padding:max(18px,env(safe-area-inset-top)) 22px max(22px,env(safe-area-inset-bottom));scrollbar-width:thin;scrollbar-color:#ffffff2a transparent}
+#about.open{display:block}
+#about h2{margin:0;font-size:24px;letter-spacing:.2px;line-height:1.15}
+#about h3{margin:26px 0 10px;font:600 10.5px/1 system-ui;letter-spacing:1.3px;color:var(--text2);text-transform:uppercase}
+#about p{margin:8px 0;color:#C9D2E4;font-size:13.5px;line-height:1.5}
+#about .top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+#about .logo{width:46px;height:46px;border-radius:12px;background:var(--bg);display:grid;place-items:center;border:1px solid var(--line);flex:none}
+#about .tag{color:var(--info);font-size:13px;margin-top:2px}
+#aboutClose{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:18px;cursor:pointer;flex:none}
+#about .lede{font-size:15px;color:var(--text);line-height:1.5}
+.store{display:flex;align-items:center;gap:12px;margin:16px 0 4px;padding:12px 14px;border-radius:14px;background:#0B1019;border:1px solid var(--line)}
+.store svg{width:26px;height:26px;flex:none}
+.store small{display:block;color:var(--text2);font-size:11px}
+.store b{font-size:15px}
+.store.soon{opacity:.92}
+.pill{margin-left:auto;font-size:10.5px;font-weight:600;color:#06121f;background:var(--bolt);border-radius:999px;padding:3px 9px;flex:none}
+.feat{display:grid;grid-template-columns:34px 1fr;gap:4px 12px;margin:0 0 14px}
+.feat .ic{width:34px;height:34px;border-radius:10px;background:#1A2233;border:1px solid var(--line);display:grid;place-items:center;font-size:17px}
+.feat b{font-size:14px;display:block;margin-bottom:1px}
+.feat span{color:var(--text2);font-size:12.5px;line-height:1.45}
+.steps{counter-reset:s;list-style:none;margin:0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:0 0 12px 38px;color:#C9D2E4;font-size:13px;line-height:1.45}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--info);color:#06121f;font-weight:700;display:grid;place-items:center;font-size:13px}
+.steps b{color:var(--text)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips span{font-size:12px;padding:4px 10px;border-radius:999px;background:#1A2233;border:1px solid var(--line);color:#C9D2E4}
+.src{margin:0;padding:0;list-style:none;font-size:12px;color:var(--text2)}
+.src li{padding:7px 0;border-top:1px solid var(--line);line-height:1.4}
+.src li:first-child{border-top:0}
+.src b{color:var(--text);font-weight:600}
+.src a{color:var(--info);text-decoration:none}
+.note{font-size:11.5px!important;color:var(--text2)!important;line-height:1.45!important}
+.foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text2);line-height:1.5}
+#infoBtn{display:none}
+@media (min-width:1000px){ :root.dock{--pw:380px} :root.dock #about{display:block} }
+@media (max-width:999px){ #about{width:100%;border-left:0} #infoBtn{display:grid} }
+@media (min-width:1000px){ :root:not(.dock) #infoBtn{display:grid} }
 @media (max-width:640px){
   header span{display:none}
   #side{width:calc(100% - 76px)}
@@ -118,8 +159,59 @@ ul.ac small{color:var(--text2);white-space:nowrap}
   <button id="euBtn" title="Italia, Europa, Mondo" aria-label="Italia, Europa, Mondo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></button>
   <button id="searchBtn" title="Cerca un luogo" aria-label="Cerca un luogo"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
   <button id="tripBtn" title="Il mio viaggio" aria-label="Il mio viaggio"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17c6 0 2-10 8-10"/></svg></button>
+  <button id="infoBtn" title="L'app" aria-label="L'app"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></svg></button>
   <button id="legendToggle" title="Legenda" aria-label="Legenda">?</button>
 </div>
+
+
+<aside id="about" aria-label="L'app MeteoStrada">
+  <div class="top">
+    <div class="logo"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="#FFE600" d="M13.6,3.3 L7.0,13.4 L11.3,13.4 L9.4,20.7 L16.8,10.2 L12.6,10.2 L14.8,3.3 Z"/></svg></div>
+    <div><h2>MeteoStrada</h2><div class="tag">Il meteo che ti avvisa lungo la strada</div></div>
+    <button id="aboutClose" aria-label="Chiudi">✕</button>
+  </div>
+  <p class="lede">Guidi, pedali o cammini e non devi fare niente: l'app capisce da sola dove stai andando e ti avvisa, a voce, di pioggia forte, temporali, vento, nebbia o ghiaccio <b>prima</b> di arrivarci.</p>
+
+  <div class="store soon">
+    <svg viewBox="0 0 24 24"><path fill="#4FA3E3" d="M3.6 2.3c-.3.2-.5.6-.5 1.1v17.2c0 .5.2.9.5 1.1l9.6-9.7z"/><path fill="#3DBE6B" d="M16.5 8.6 13.2 12l3.3 3.4 3.9-2.2c.8-.5.8-1.6 0-2.1z"/><path fill="#FFD21F" d="M3.6 2.3l9.6 9.7 3.3-3.4L5 2.1c-.5-.3-1-.2-1.4.2z"/><path fill="#FF451A" d="M13.2 12 3.6 21.7c.4.4.9.4 1.4.2l11.5-6.5z"/></svg>
+    <div><small>Prossimamente su</small><b>Google Play</b></div>
+    <span class="pill">In arrivo</span>
+  </div>
+  <p class="note">App Android, gratuita. Senza account e senza pubblicità.</p>
+
+  <h3>Cosa fa</h3>
+  <div class="feat"><div class="ic">🧭</div><div><b>Non serve la destinazione</b><span>Deduce il percorso da GPS, velocità e direzione. Se vuoi, puoi indicare una meta e controlla la strada fino a lì, anche prima di partire.</span></div></div>
+  <div class="feat"><div class="ic">🔊</div><div><b>Ti avvisa a voce</b><span>Notifica e voce che abbassa il volume del navigatore. Dice una cosa una volta sola, senza ripetersi, e ti dice anche quando il pericolo è superato.</span></div></div>
+  <div class="feat"><div class="ic">⛈️</div><div><b>Tanti pericoli, non solo la pioggia</b><span>Temporali e grandine, pioggia forte, vento forte e laterale, nebbia, ghiaccio, neve, sole basso che abbaglia.</span></div></div>
+  <div class="feat"><div class="ic">🚗</div><div><b>Auto, bici, trekking</b><span>Ogni profilo ha le sue soglie. In trekking legge anche la traccia GPX e stima a che ora passerai da ogni tratto.</span></div></div>
+  <div class="feat"><div class="ic">📍</div><div><b>Luoghi salvati</b><span>Casa al mare, auto parcheggiata, il rifugio: ti avvisa anche ad app chiusa quando sta arrivando un temporale.</span></div></div>
+  <div class="feat"><div class="ic">📡</div><div><b>Radar e allerte ufficiali</b><span>In Italia usa il radar della Protezione Civile e ne segnala le allerte.</span></div></div>
+
+  <h3>Come funziona</h3>
+  <ol class="steps">
+    <li><b>Apri l'app e parti.</b> Il monitoraggio si accende da solo.</li>
+    <li><b>Guarda avanti per te:</b> controlla radar e previsioni lungo la strada, all'ora in cui ci passerai.</li>
+    <li><b>Ti avvisa in tempo:</b> «Temporale tra 12 minuti, a 14 km davanti a te».</li>
+  </ol>
+
+  <h3>Questo sito</h3>
+  <p>È la mappa del meteo di MeteoStrada, senza le funzioni da guida. La pioggia si aggiorna ogni pochi minuti:</p>
+  <div class="chips"><span>Italia · radar</span><span>Europa · radar</span><span>Mondo · satellite</span></div>
+  <p>Con <b>«Il mio viaggio»</b> (il pulsante col percorso, a sinistra) scegli partenza, arrivo e ora: il sito mostra dove troverai la pioggia lungo la strada.</p>
+
+  <h3>Crediti e fonti dei dati</h3>
+  <ul class="src">
+    <li><b>Radar Italia</b> · Dipartimento della Protezione Civile, <a href="https://radar.protezionecivile.it" target="_blank" rel="noopener">radar.protezionecivile.it</a> (CC BY-SA 4.0)</li>
+    <li><b>Radar Europa</b> · OPERA, EUMETNET (CC BY 4.0)</li>
+    <li><b>Pioggia da satellite</b> · NOAA/NESDIS Enterprise Rain Rate: una stima, con circa mezz'ora di ritardo, fra 60° sud e 70° nord</li>
+    <li><b>Previsioni</b> · <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0)</li>
+    <li><b>Mappa</b> · Natural Earth (pubblico dominio), GeoNames (CC BY 4.0)</li>
+    <li><b>Percorsi</b> · © contributori di <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL), calcolati con OSRM</li>
+  </ul>
+  <p class="note">Il radar mostra la pioggia caduta o in corso, non è una previsione. Le informazioni sono orientative: non sostituiscono i bollettini e le allerte ufficiali, né il buon senso alla guida.</p>
+
+  <div class="foot">MeteoStrada è un progetto indipendente e gratuito.<br>Informativa sulla privacy e contatti: in arrivo con l'app.</div>
+</aside>
 
 <div id="status" class="card"></div>
 
@@ -185,9 +277,13 @@ function lonLatToNorm(lon, lat) {
 }
 const worldSize = () => 256 * Math.pow(2, view.zoom);
 
+let aboutOpen = true;   // sui monitor grandi il pannello sta aperto a destra
+try { if (localStorage.getItem("ms-about") === "0") aboutOpen = false; } catch {}
 function resize() {
   dpr = window.devicePixelRatio || 1;
-  W = window.innerWidth; H = window.innerHeight;
+  const dock = window.innerWidth >= 1000 && aboutOpen;
+  document.documentElement.classList.toggle("dock", dock);
+  W = window.innerWidth - (dock ? 380 : 0); H = window.innerHeight;
   canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   dirty = true;
 }
@@ -1128,6 +1224,17 @@ document.getElementById("legendToggle").onclick = () => toggleView("legend");
 document.getElementById("searchBtn").onclick = () => toggleView("search");
 document.getElementById("tripBtn").onclick = () => toggleView("trip");
 if (window.innerWidth <= 640) setView(null);
+// pannello "L'app": a destra sui monitor larghi, a tutto schermo sui telefoni
+{
+  const about = document.getElementById("about");
+  const save = () => { try { localStorage.setItem("ms-about", aboutOpen ? "1" : "0"); } catch {} };
+  document.getElementById("infoBtn").onclick = () => {
+    if (window.innerWidth >= 1000) { aboutOpen = true; save(); resize(); } else about.classList.add("open");
+  };
+  document.getElementById("aboutClose").onclick = () => {
+    if (window.innerWidth >= 1000) { aboutOpen = false; save(); resize(); } else about.classList.remove("open");
+  };
+}
 
 let tour = 0;   // 0 Italia, 1 Europa, 2 Mondo
 document.getElementById("euBtn").onclick = () => {
