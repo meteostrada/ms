@@ -28,8 +28,8 @@ jobs:
           path: |
             cache/tiles
             cache/noaa
-          key: tessere-${{ github.run_id }}
-          restore-keys: tessere-
+          key: tessere2-${{ github.run_id }}
+          restore-keys: tessere2-
       - name: Sito
         run: python3 tools/build_site.py dist
       - name: Radar europeo in tessere

@@ -1,5 +1,5 @@
 """Livelli di zoom piu' bassi (mondo, continenti) a partire dalle tessere gia' fatte.
-Ogni tessera genitore e' la media 2x2 dei quattro figli (mm/h); un figlio che manca vale "asciutto"
+Ogni tessera genitore prende il valore massimo dei quattro figli (mm/h); un figlio che manca vale "asciutto"
 (e "senza copertura" per le tessere con alfa).
 Uso interno: build(cartella_foto, zoom_di_partenza, zoom_minimo, con_alfa)
 Codifica come le tessere: v = 255 * sqrt(mm/h / 100)."""
@@ -35,7 +35,7 @@ def build(frame_dir, z_from, z_min, alpha):
                     m, a = _read(os.path.join(src, str(px * 2 + dx), f"{py * 2 + dy}.png"), alpha)
                     big[dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256] = m
                     cov[dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256] = a
-            mm = big.reshape(256, 2, 256, 2).mean(axis=(1, 3))
+            mm = big.reshape(256, 2, 256, 2).max(axis=(1, 3))   # il massimo, non la media: un temporale piccolo non deve sparire da lontano
             a = cov.reshape(256, 2, 256, 2).mean(axis=(1, 3))
             code = np.rint(np.sqrt(np.clip(mm, 0, 100) / 100) * 255).astype(np.uint8)
             d = os.path.join(frame_dir, str(z - 1), str(px)); os.makedirs(d, exist_ok=True)
