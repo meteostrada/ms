@@ -91,7 +91,7 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 
 <header class="card">
   <div class="bolt"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#FFE600" d="M13.6,3.3 L7.0,13.4 L11.3,13.4 L9.4,20.7 L16.8,10.2 L12.6,10.2 L14.8,3.3 Z"/></svg></div>
-  <div><b>MeteoStrada</b><span>Radar della pioggia · Italia ed Europa</span></div>
+  <div><b>MeteoStrada</b><span>Radar della pioggia · tutto il mondo</span></div>
 </header>
 
 <div id="side">
@@ -132,7 +132,7 @@ ul.ac small{color:var(--text2);white-space:nowrap}
   <button id="now" disabled>Adesso</button>
 </div>
 
-<div id="credits">Radar: Dipartimento della Protezione Civile (CC BY-SA 4.0), OPERA/EUMETNET (CC BY 4.0) · Mappa: Natural Earth, GeoNames (CC BY 4.0)</div>
+<div id="credits">Radar: Dipartimento della Protezione Civile (CC BY-SA 4.0), OPERA/EUMETNET (CC BY 4.0) · Satellite: NOAA/NESDIS Enterprise Rain Rate · Mappa: Natural Earth, GeoNames (CC BY 4.0)</div>
 
 <script>
 "use strict";
@@ -140,6 +140,7 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 const CFG = Object.assign({
   dpc: "https://s3-prod-dpc-radar-webp-cache.s3.eu-south-1.amazonaws.com",
   eu: "",                // indirizzo delle tessere OPERA pubblicate dal sito (vuoto = nessuna)
+  noaa: "",              // indirizzo delle tessere della pioggia da satellite NOAA (vuoto = nessuna)
   frames: 13,            // 13 foto = un'ora di film (una ogni 5 minuti)
   probe: [68, 46],       // tessera che c'è sempre, per capire se una foto è già pubblicata
 }, window.METEOSTRADA_CONFIG || {});
@@ -163,6 +164,10 @@ const NAMES = ["Pioviggine", "Pioggia leggera", "Pioggia moderata", "Pioggia for
     d.innerHTML = `<i style="background:rgba(${c[0]},${c[1]},${c[2]},${c[3]/255});border-color:${edge}"></i>${NAMES[i]}`;
     lg.appendChild(d);
   });
+  const nt = document.createElement("div");
+  nt.style.cssText = "margin-top:8px;font-size:11px;line-height:1.35;opacity:.7;display:block";
+  nt.textContent = "Fuori da Italia ed Europa la pioggia è una stima da satellite, con circa mezz'ora di ritardo.";
+  lg.appendChild(nt);
 }
 
 // ---------------------------------------------------------------- stato della mappa
@@ -494,12 +499,21 @@ async function loadEuManifest() {
     const r = await fetch(CFG.eu + "/latest.json", { cache: "no-store" });
     if (!r.ok) return;
     const j = await r.json();
-    euFrames = (j.frames || []).map(f => Date.parse(f));
+    const nf = (j.frames || []).map(f => Date.parse(f));
+    if (JSON.stringify(nf) !== JSON.stringify(euFrames)) { dataCache.clear(); rainCache.clear(); }
+    euFrames = nf;
     euTiles = j.tiles ? new Set(j.tiles) : null;
     euCache.clear(); dirty = true;
   } catch { /* senza Europa resta l'Italia */ }
 }
-function euTile(t, x, y) {
+// Il radar europeo copre solo questa parte del mondo: fuori non si chiede nemmeno.
+function inEurope(zl, x, y) {
+  const n = 1 << zl, lon0 = x / n * 360 - 180, lon1 = (x + 1) / n * 360 - 180;
+  const lat = yy => Math.atan(Math.sinh(Math.PI * (1 - 2 * yy / n))) * 180 / Math.PI;
+  return lon1 >= -25 && lon0 <= 50 && lat(y) >= 30 && lat(y + 1) <= 72;
+}
+function euTile(t, zl, x, y) {
+  if (zl < DATA_Z && !inEurope(zl, x, y)) return Promise.resolve(null);
   if (EU_SNAP && !CFG.eu) {
     const b64 = EU_SNAP.tiles[x + "/" + y];
     if (!b64) return Promise.resolve(null);
@@ -510,12 +524,12 @@ function euTile(t, x, y) {
   if (!euFrames.length) return Promise.resolve(null);
   let best = null;
   for (const f of euFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
-  if (best === null || (euTiles && !euTiles.has(x + "/" + y))) return Promise.resolve(null);
-  const key = best + "/" + x + "/" + y;
+  if (best === null || (zl === DATA_Z && euTiles && !euTiles.has(x + "/" + y))) return Promise.resolve(null);
+  const key = best + "/" + zl + "/" + x + "/" + y;
   let p = euCache.get(key);
   if (p) return p;
   p = (async () => {
-    const r = await fetch(`${CFG.eu}/${stamp(best)}/${DATA_Z}/${x}/${y}.png`);
+    const r = await fetch(`${CFG.eu}/${stamp(best)}/${zl}/${x}/${y}.png`);
     if (!r.ok) return null;
     return euDecode(await createImageBitmap(await r.blob(), BMP_OPTS));
   })();
@@ -525,22 +539,80 @@ function euTile(t, x, y) {
   return p;
 }
 
+// Resto del mondo: pioggia stimata dal satellite (NOAA), già convertita in tessere dal lavoro automatico.
+// Una tessera che non esiste, dentro la fascia coperta (latitudini -60..70), vuol dire: asciutto.
+// Le tessere ci sono ai livelli 3..6; al livello 7 si ingrandisce la tessera del livello 6.
+let noaaFrames = [];
+const noaaCache = new Map();
+const NOAA_MAXZ = 6;
+async function loadNoaaManifest() {
+  if (!CFG.noaa) return;
+  try {
+    const r = await fetch(CFG.noaa + "/latest.json", { cache: "no-store" });
+    if (!r.ok) return;
+    const nf = ((await r.json()).frames || []).map(f => Date.parse(f));
+    if (JSON.stringify(nf) !== JSON.stringify(noaaFrames)) { noaaCache.clear(); dataCache.clear(); rainCache.clear(); }
+    noaaFrames = nf; dirty = true;
+  } catch { /* senza satellite restano i radar */ }
+}
+function noaaFrameFor(t) {
+  let best = null;
+  for (const f of noaaFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
+  const last = noaaFrames[noaaFrames.length - 1];
+  if (best === null && last !== undefined && t > last && t - last <= 50 * 60000) best = last;   // l'ultima foto del satellite ha circa 30 minuti di ritardo
+  return best;
+}
+function noaaRaw(best, zl, x, y) {
+  const n = 1 << zl, la = yy => Math.atan(Math.sinh(Math.PI * (1 - 2 * yy / n))) * 180 / Math.PI;
+  if (la(y) < -60 || la(y + 1) > 70) return Promise.resolve(null);   // fuori dalla fascia coperta
+  const key = best + "/" + zl + "/" + x + "/" + y;
+  let p = noaaCache.get(key);
+  if (p) return p;
+  p = (async () => {
+    const r = await fetch(`${CFG.noaa}/${stamp(best)}/${zl}/${x}/${y}.png`);
+    if (r.status === 404 || r.status === 403) return new Float32Array(65536);   // nessuna pioggia qui
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS)), out = new Float32Array(65536);
+    for (let i = 0; i < 65536; i++) { const v = px[i * 4] / 255; out[i] = v * v * 100; }
+    return out;
+  })();
+  p.catch(() => noaaCache.delete(key));
+  noaaCache.set(key, p);
+  if (noaaCache.size > 600) noaaCache.delete(noaaCache.keys().next().value);
+  return p;
+}
+async function noaaTile(t, zl, x, y) {
+  if (!CFG.noaa) return null;
+  await euReady;
+  const best = noaaFrameFor(t);
+  if (best === null) return null;
+  if (zl <= NOAA_MAXZ) return noaaRaw(best, zl, x, y);
+  const k = 1 << (zl - NOAA_MAXZ), parent = await noaaRaw(best, NOAA_MAXZ, x >> (zl - NOAA_MAXZ), y >> (zl - NOAA_MAXZ));
+  if (!parent) return null;
+  const qx = (x % k) * (256 / k), qy = (y % k) * (256 / k), out = new Float32Array(65536), g = 256 / k;
+  for (let j = 0; j < 256; j++) for (let i = 0; i < 256; i++) out[j * 256 + i] = parent[(qy + Math.floor(j / k)) * 256 + qx + Math.floor(i / k)];
+  return out;
+}
+
 // Una tessera dati: l'Italia dal radar nazionale, dove non vede si completa con quello europeo.
-const dataCache = new Map(); // "tempo/x/y" -> Promise<Float32Array|null>
-function dataTile(t, x, y) {
-  const key = t + "/" + x + "/" + y;
+const dataCache = new Map(); // "tempo/livello/x/y" -> Promise<Float32Array|null>
+// Ordine di fiducia per ogni pixel: radar italiano, radar europeo, satellite.
+function dataTile(t, zl, x, y) {
+  const key = t + "/" + zl + "/" + x + "/" + y;
   let p = dataCache.get(key);
   if (p) return p;
   let failed = false;
-  p = Promise.all([dpcTile(t, x, y).catch(() => { failed = true; return null; }),
-                   euReady.then(() => euTile(t, x, y)).catch(() => null)]).then(([d, e]) => {
+  p = Promise.all([zl === DATA_Z ? dpcTile(t, x, y).catch(() => { failed = true; return null; }) : null,
+                   euReady.then(() => euTile(t, zl, x, y)).catch(() => null),
+                   noaaTile(t, zl, x, y).catch(() => null)]).then(([d, e, n]) => {
     if (failed) setTimeout(() => dataCache.delete(key), 0);   // non si ricorda: la prossima volta si riscarica
-    if (!d && !e && !failed) return null;
+    if (!d && !e && !n && !failed) return null;
     const out = new Float32Array(65536);
     if (failed) out.partial = true;
     for (let i = 0; i < 65536; i++) {
       let v = d ? d[i] : -1;
       if (v < 0) v = e ? e[i] : -1;
+      if (v < 0) v = n ? n[i] : -1;
       out[i] = v < 0 ? 0 : v;
     }
     return out;
@@ -560,7 +632,7 @@ const rainTries = new Map(), rainNext = new Map();
 const lastDrawn = new Map(); // "z|x|y" -> ultimo canvas mostrato (per non sfarfallare nel film)
 
 async function renderRain(t, z, tx, ty) {
-  const f = Math.pow(2, z - DATA_Z);
+  const zl = Math.min(z, DATA_Z), f = Math.pow(2, z - zl), nt = 1 << zl;   // livello dei dati usato: lontano si usano livelli piu' bassi
   const gx0 = Math.floor(tx * 256 / f) - 1, gy0 = Math.floor(ty * 256 / f) - 1;
   const gx1 = Math.ceil((tx + 1) * 256 / f) + 1, gy1 = Math.ceil((ty + 1) * 256 / f) + 1;
   const rw = gx1 - gx0 + 1, rh = gy1 - gy0 + 1;
@@ -568,8 +640,8 @@ async function renderRain(t, z, tx, ty) {
   const jobs = [];
   for (let sy = Math.floor(gy0 / 256); sy <= Math.floor(gy1 / 256); sy++) {
     for (let sx = Math.floor(gx0 / 256); sx <= Math.floor(gx1 / 256); sx++) {
-      if (sx < 0 || sy < 0 || sx >= 128 || sy >= 128) continue;
-      jobs.push(dataTile(t, sx, sy).then(arr => ({ sx, sy, arr })));
+      if (sx < 0 || sy < 0 || sx >= nt || sy >= nt) continue;
+      jobs.push(dataTile(t, zl, sx, sy).then(arr => ({ sx, sy, arr })));
     }
   }
   let partial = false;
@@ -662,7 +734,7 @@ function rainTile(t, z, x, y) {
 }
 
 // ---------------------------------------------------------------- disegno
-const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 5, 11);
+const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 3, 11);
 let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
 
 let statusTimer = null;
@@ -761,13 +833,13 @@ function showFrame(i) {
 }
 async function prefetch() {
   // scarica in anticipo le tessere di tutte le foto per la zona visibile
-  const v = visibleTiles(DATA_Z, 0);
-  if ((v.x1 - v.x0 + 1) * (v.y1 - v.y0 + 1) > 150) return;   // vista troppo larga (mondo): non si scarica tutto
+  const zl = Math.min(rainZoom(), DATA_Z), v = visibleTiles(zl, 0), top = (1 << zl) - 1;
+  if ((v.x1 - v.x0 + 1) * (v.y1 - v.y0 + 1) > 150) return;   // vista troppo larga: non si scarica tutto
   const jobs = [];
   for (const t of frames)
-    for (let y = clamp(v.y0, 0, 127); y <= clamp(v.y1, 0, 127); y++)
-      for (let x = clamp(v.x0, 0, 127); x <= clamp(v.x1, 0, 127); x++)
-        jobs.push(dataTile(t, x, y).catch(() => null));
+    for (let y = clamp(v.y0, 0, top); y <= clamp(v.y1, 0, top); y++)
+      for (let x = clamp(v.x0, 0, top); x <= clamp(v.x1, 0, top); x++)
+        jobs.push(dataTile(t, zl, x, y).catch(() => null));
   await Promise.all(jobs);
 }
 // Il film si prepara da solo in background (dati scaricati e forme già disegnate per tutte le foto
@@ -948,7 +1020,7 @@ function modelAt(res, t) {
 async function radarAt(lat, lon) {
   if (!frames.length) return null;
   const [gx, gy] = toGlobal(lat, lon), tx = Math.floor(gx / 256), ty = Math.floor(gy / 256);
-  let arr; try { arr = await dataTile(frames[frames.length - 1], tx, ty); } catch { return null; }
+  let arr; try { arr = await dataTile(frames[frames.length - 1], DATA_Z, tx, ty); } catch { return null; }
   if (!arr) return null;
   let best = 0;
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -1194,10 +1266,11 @@ function drawRoute() {
 window.addEventListener("resize", () => { resize(); });
 resize(); fitItaly();
 window.__ms = { view, get trip() { return trip; }, setView, get frames() { return frames; }, showFrame, refresh, get ready() { return rainBusy.size === 0 && !dirty; } };
-euReady = loadEuManifest();
+euReady = Promise.all([loadEuManifest(), loadNoaaManifest()]);
 loadMap().catch(e => setStatus("Mappa non caricata"));
 refresh(true);
 setInterval(() => refresh(false), 90000);
+setInterval(() => { euReady = Promise.all([loadEuManifest(), loadNoaaManifest()]); }, 300000);   // nuove foto di OPERA e del satellite
 </script>
 </body>
 </html>
