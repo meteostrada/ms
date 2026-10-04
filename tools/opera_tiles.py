@@ -14,6 +14,8 @@ Dati OPERA: EUMETNET, CC BY 4.0.
 import sys, os, io, json, math, time, datetime, shutil, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np, h5py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import piramide
 from PIL import Image
 from pyproj import Transformer
 from scipy.ndimage import map_coordinates
@@ -131,6 +133,7 @@ def make_tiles(t, rain, covered):
             p = os.path.join(d, f"{y}.png")
             Image.fromarray(img, "RGBA").save(p, optimize=True)
             count += 1; size += os.path.getsize(p)
+    count += piramide.build(os.path.join(out_dir, name), Z, 5, True)   # livelli 6, 5 e 4 per le viste lontane
     open(os.path.join(out_dir, name, ".done"), "w").close()
     return name, count, size
 

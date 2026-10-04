@@ -25,18 +25,24 @@ jobs:
       - name: Foto già convertite
         uses: actions/cache@v4
         with:
-          path: cache/tiles
+          path: |
+            cache/tiles
+            cache/noaa
           key: tessere-${{ github.run_id }}
           restore-keys: tessere-
       - name: Sito
         run: python3 tools/build_site.py dist
       - name: Radar europeo in tessere
         run: python3 tools/opera_tiles.py cache/tiles 13
+      - name: Pioggia da satellite (NOAA) in tessere
+        continue-on-error: true
+        run: python3 tools/noaa_tiles.py cache/noaa 7
       - name: Unisci
         run: |
-          mkdir -p dist/tiles
+          mkdir -p dist/tiles dist/noaa
           cp -r cache/tiles/. dist/tiles/
-          find dist/tiles -name .done -delete
+          cp -r cache/noaa/. dist/noaa/ || true
+          find dist/tiles dist/noaa -name .done -delete
           du -sh dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
