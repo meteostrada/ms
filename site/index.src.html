@@ -303,6 +303,7 @@ async function loadMap() {
   layers.major = roads.filter(r => r.kind === 1);
   layers.minor = roads.filter(r => r.kind !== 1);
   MAP = layers;
+  makeLod();
   buildPlaces();
   dirty = true;
 }
@@ -327,6 +328,29 @@ function tracePath(c, feats, closed, bx0, by0, bx1, by1, minSize, step2) {
   }
 }
 
+// Versione semplificata dei contorni per le viste lontane (mondo, continenti): molti meno punti da tracciare.
+let LOD = null;
+function makeLod() {
+  const tol = 6, t2 = tol * tol;   // 6 pixel globali = meno di 1 pixel dello schermo a zoom 4
+  LOD = {};
+  for (const id of [L_LAND, L_COAST, L_LAKES, L_BORDERS]) {
+    LOD[id] = (MAP[id] || []).filter(f => (f.x1 - f.x0 > tol || f.y1 - f.y0 > tol || id === L_BORDERS || id === L_COAST)).map(f => {
+      const parts = [];
+      for (const part of f.parts) {
+        if (part.length < 4) continue;
+        const out = [part[0], part[1]]; let lx = part[0], ly = part[1];
+        for (let i = 2; i < part.length - 2; i += 2) {
+          const dx = part[i] - lx, dy = part[i + 1] - ly;
+          if (dx * dx + dy * dy < t2) continue;
+          out.push(part[i], part[i + 1]); lx = part[i]; ly = part[i + 1];
+        }
+        out.push(part[part.length - 2], part[part.length - 1]);
+        parts.push(out);
+      }
+      return Object.assign({}, f, { parts });
+    });
+  }
+}
 const baseCache = new Map();
 function baseTile(z, tx, ty) {
   const T = dpr >= 1.5 ? 512 : 256, key = z + "|" + tx + "|" + ty + "|" + T;
@@ -342,10 +366,11 @@ function baseTile(z, tx, ty) {
     const step2 = (px * 0.8) * (px * 0.8), K = T / 256;
     c.lineJoin = c.lineCap = "round";
     const km = 115800 / Math.pow(2, z);   // larghezza indicativa dello schermo
-    tracePath(c, MAP[L_LAND] || [], true, bx0, by0, bx1, by1, px, step2);
+    const G = id => (z <= 4 && LOD && LOD[id]) ? LOD[id] : (MAP[id] || []);
+    tracePath(c, G(L_LAND), true, bx0, by0, bx1, by1, px, step2);
     c.fillStyle = MC.land; c.fill("evenodd"); c.strokeStyle = MC.land; c.lineWidth = 0.8 * K * px; c.stroke();
     if (km <= 100) { tracePath(c, MAP[L_URBAN] || [], true, bx0, by0, bx1, by1, px * 2, step2); c.fillStyle = MC.urban; c.fill("evenodd"); }
-    tracePath(c, MAP[L_LAKES] || [], true, bx0, by0, bx1, by1, px * 3, step2); c.fillStyle = MC.ocean; c.fill("evenodd");
+    tracePath(c, G(L_LAKES), true, bx0, by0, bx1, by1, px * 3, step2); c.fillStyle = MC.ocean; c.fill("evenodd");
     if (km <= 600) {
       const maxRank = km <= 100 ? 15 : km <= 300 ? 6 : 4;
       tracePath(c, (MAP[L_RIVERS] || []).filter(r => r.kind <= maxRank), false, bx0, by0, bx1, by1, px * 4, step2);
@@ -355,16 +380,18 @@ function baseTile(z, tx, ty) {
       tracePath(c, MAP[L_REGIONS] || [], false, bx0, by0, bx1, by1, 0, step2);
       c.setLineDash([4 * K * px, 3 * K * px]); c.strokeStyle = MC.region; c.lineWidth = 0.8 * K * px; c.stroke(); c.setLineDash([]);
     }
-    tracePath(c, MAP[L_BORDERS] || [], false, bx0, by0, bx1, by1, 0, step2);
+    tracePath(c, G(L_BORDERS), false, bx0, by0, bx1, by1, 0, step2);
     c.strokeStyle = MC.border; c.lineWidth = 1.2 * K * px; c.stroke();
     if (km <= 100) { tracePath(c, MAP.minor, false, bx0, by0, bx1, by1, px * 3, step2); c.strokeStyle = MC.minor; c.lineWidth = K * px; c.stroke(); }
     if (km <= 300) { tracePath(c, MAP.major, false, bx0, by0, bx1, by1, 0, step2); c.strokeStyle = MC.major; c.lineWidth = 1.6 * K * px; c.stroke(); }
-    tracePath(c, MAP[L_COAST] || [], false, bx0, by0, bx1, by1, px, step2);
+    tracePath(c, G(L_COAST), false, bx0, by0, bx1, by1, px, step2);
     c.strokeStyle = MC.coast; c.lineWidth = K * px; c.stroke();
   }
   if (MAP) {
     baseCache.set(key, cv);
-    if (baseCache.size > 90) baseCache.delete(baseCache.keys().next().value);
+    if (baseCache.size > 120) {
+      for (const k of baseCache.keys()) { if (+k.split("|")[0] > 3) { baseCache.delete(k); break; } }   // le tessere del mondo restano
+    }
   }
   return cv;
 }
@@ -675,7 +702,8 @@ function draw() {
 
   drawLayer((x, y, sx, sy, w, h) => { ctx.drawImage(baseTile(bz, x, y), sx, sy, w, h); }, bz);
 
-  if (frames.length) {
+  const rv = visibleTiles(rz);
+  if (frames.length && (rv.x1 - rv.x0 + 1) * (rv.y1 - rv.y0 + 1) <= 120) {   // con la vista sul mondo intero la pioggia non si disegna (per ora)
     const t = frames[cur];
     drawLayer((x, y, sx, sy, w, h) => {
       const cv = rainTile(t, rz, x, y);
@@ -734,6 +762,7 @@ function showFrame(i) {
 async function prefetch() {
   // scarica in anticipo le tessere di tutte le foto per la zona visibile
   const v = visibleTiles(DATA_Z, 0);
+  if ((v.x1 - v.x0 + 1) * (v.y1 - v.y0 + 1) > 150) return;   // vista troppo larga (mondo): non si scarica tutto
   const jobs = [];
   for (const t of frames)
     for (let y = clamp(v.y0, 0, 127); y <= clamp(v.y1, 0, 127); y++)
