@@ -49,7 +49,7 @@ header span{color:var(--text2);font-size:12px;display:block;margin-top:-1px}
 .field{position:relative;display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
 .field>span{font-size:11px;color:var(--text2)}
 .field .row{display:flex;gap:6px}
-input[type=text],input[type=datetime-local]{width:100%;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;color-scheme:dark}
+input[type=text],select#dep{width:100%;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;color-scheme:dark}
 input:focus{outline:2px solid var(--info);outline-offset:0}
 .sm{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:0 10px;font:inherit;font-size:12px;cursor:pointer;flex:none;min-height:38px}
 .primary{width:100%;background:var(--info);color:var(--onaccent);border:0;border-radius:10px;padding:11px;font:600 14px system-ui;cursor:pointer}
@@ -198,7 +198,7 @@ body.radar #bar{display:flex}
     <h4>Il mio viaggio</h4>
     <div class="field"><span>Da</span><div class="row"><input id="from" type="text" placeholder="Partenza" autocomplete="off" spellcheck="false"><button class="sm" id="useHere" title="La mia posizione" type="button">Io</button></div></div>
     <div class="field"><span>A</span><input id="to" type="text" placeholder="Arrivo" autocomplete="off" spellcheck="false"></div>
-    <div class="field"><span>Partenza</span><div class="row"><input id="dep" type="datetime-local"><button class="sm" id="depNow" type="button">Adesso</button></div></div>
+    <div class="field"><span>Partenza</span><select id="dep" aria-label="Quando parti"></select></div>
     <button class="primary" id="go" type="button">Controlla il viaggio</button>
     <div id="tripOut"></div>
   </div>
@@ -1263,7 +1263,7 @@ const mmTxt = v => (v < 10 ? v.toFixed(1) : Math.round(v)).toString().replace(".
 
 async function forecastAt(points) {
   const q = "latitude=" + points.map(p => p.lat.toFixed(3)).join(",") + "&longitude=" + points.map(p => p.lon.toFixed(3)).join(",") +
-    "&minutely_15=precipitation&hourly=precipitation,weather_code&timeformat=unixtime&timezone=UTC&forecast_days=3";
+    "&minutely_15=precipitation&hourly=precipitation,precipitation_probability,weather_code&timeformat=unixtime&timezone=UTC&forecast_days=3";
   const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
   if (!r.ok) throw new Error("previsioni " + r.status);
   const j = await r.json();
@@ -1272,7 +1272,7 @@ async function forecastAt(points) {
 // mm/h e temporale previsti in quel punto a quell'ora
 function modelAt(res, t) {
   const sec = Math.floor(t / 1000);
-  let mm = null, thunder = false;
+  let mm = null, thunder = false, prob = null;
   const m = res.minutely_15;
   if (m && m.time && m.precipitation) {
     const i = Math.floor((sec - m.time[0]) / 900);
@@ -1284,9 +1284,10 @@ function modelAt(res, t) {
     if (i >= 0 && i < h.time.length) {
       if (mm === null && h.precipitation && h.precipitation[i] != null) mm = h.precipitation[i];
       if (h.weather_code && h.weather_code[i] >= 95) thunder = true;
+      if (h.precipitation_probability && h.precipitation_probability[i] != null) prob = h.precipitation_probability[i];
     }
   }
-  return { mm: mm === null ? 0 : mm, thunder };
+  return { mm: mm === null ? 0 : mm, thunder, prob };
 }
 // pioggia vista dal radar in quel punto (massimo attorno, circa 2,5 km); null se fuori copertura
 async function radarAt(lat, lon) {
@@ -1396,12 +1397,22 @@ attachAutocomplete(q, async p => {
 // ---------------------------------------------------------------- il mio viaggio
 const fromI = document.getElementById("from"), toI = document.getElementById("to"), depI = document.getElementById("dep");
 attachAutocomplete(fromI); attachAutocomplete(toI);
-function setDepNow() {
-  const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-  depI.value = d.toISOString().slice(0, 16);
+// Partenza: "Adesso" oppure un orario nelle prossime 24 ore (ogni mezz'ora per 6 ore, poi ogni ora). Piu' avanti la previsione non e' affidabile.
+function fillDeparture() {
+  const keep = depI.value, now = Date.now(), HALF = 1800000;
+  const first = Math.ceil(now / HALF) * HALF;
+  const dayTxt = t => { const d = new Date(t), o = new Date(); o.setHours(0, 0, 0, 0);
+    const days = Math.round((new Date(d).setHours(0, 0, 0, 0) - o.getTime()) / 86400000);
+    return days === 0 ? "Oggi" : days === 1 ? "Domani" : d.toLocaleDateString("it-IT", { weekday: "long" }); };
+  depI.innerHTML = "";
+  const add = (v, txt) => { const o = document.createElement("option"); o.value = v; o.textContent = txt; depI.appendChild(o); };
+  add("0", "Adesso");
+  for (let t = first; t <= now + 24 * 3600000; t += (t - now <= 6 * 3600000 ? HALF : 2 * HALF))
+    add(String(t), dayTxt(t) + " " + fmtTime(t) + (t - now > 6 * 3600000 ? " · indicativa" : ""));
+  if ([...depI.options].some(o => o.value === keep && keep !== "0")) depI.value = keep;   // se l'orario scelto e' ancora in elenco, resta
 }
-setDepNow();
-document.getElementById("depNow").onclick = setDepNow;
+fillDeparture();
+document.getElementById("tripBtn").addEventListener("click", fillDeparture);
 document.getElementById("useHere").onclick = () => {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(p => {
@@ -1446,7 +1457,7 @@ async function computeTrip(a, b, dep) {
   const nowT = Date.now();
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i], m = modelAt(fcs[i] || {}, s.eta);
-    s.model = m.mm; s.thunder = m.thunder; s.radar = null;
+    s.model = m.mm; s.thunder = m.thunder; s.prob = m.prob; s.radar = null;
     // nei primi 45 minuti conta anche quello che il radar vede adesso
     if (s.eta - nowT <= 45 * 60000 && s.eta > nowT - 30 * 60000) s.radar = await radarAt(s.lat, s.lon);
     s.mmh = Math.max(s.model, s.radar || 0);
@@ -1469,6 +1480,9 @@ function groupHazards(t) {
   });
 }
 const rgb = (l, a = 1) => l < 0 ? "rgba(232,238,248," + a + ")" : `rgba(${COLORS[l][0]},${COLORS[l][1]},${COLORS[l][2]},${a})`;
+// quanto e' affidabile una previsione tra tot ore: l'incertezza cresce con la distanza nel tempo
+const leadH = t => (t - Date.now()) / 3600000;
+const confTxt = h => h <= 2 ? "previsione affidabile" : h <= 6 ? "previsione abbastanza affidabile" : "previsione indicativa";
 const durTxt = ms => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return (h ? h + " h " : "") + (m % 60) + " min"; };
 
 function renderTrip(t, out) {
@@ -1495,12 +1509,17 @@ function renderTrip(t, out) {
     const body = document.createElement("div"); row.appendChild(body);
     const title = document.createElement("b");
     title.textContent = NAMES[h.lvl] + (h.thunder ? ", possibili temporali" : "") + " · " + mmTxt(h.worst.mmh);
-    const when = h.t0 === h.t1 ? "intorno alle " + fmtTime(h.t0) : "dalle " + fmtTime(h.t0) + " alle " + fmtTime(h.t1);
+    const lead = leadH(h.t0), HR = 3600000;
+    // lontano nel tempo l'orario esatto non si sa: si da' una finestra piu' larga
+    const when = lead > 6 ? "tra le " + fmtTime(Math.floor(h.t0 / HR) * HR - HR) + " e le " + fmtTime(Math.ceil(h.t1 / HR) * HR + HR)
+      : h.t0 === h.t1 ? "intorno alle " + fmtTime(h.t0) : "dalle " + fmtTime(h.t0) + " alle " + fmtTime(h.t1);
+    const probs = h.g.map(x => x.prob).filter(v => v != null), prob = probs.length ? Math.max(...probs) : null;
     const where = (h.place ? "vicino a " + h.place.name + ", " : "") + (h.k0 === h.k1 ? "km " + Math.round(h.k0) : "km " + Math.round(h.k0) + "–" + Math.round(h.k1));
-    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where;
+    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where + " · " + confTxt(lead) + (prob != null ? " · probabilità " + prob + "%" : "");
     body.append(title, sub);
     row.onclick = () => flyTo(h.worst.lat, h.worst.lon, 9.5);
   }
+  if (leadH(t.arr) > 6 || leadH(t.dep) > 6) add("div", "err", "Oltre le 6 ore la previsione è solo indicativa: ricontrolla più vicino alla partenza.").style.marginTop = "6px";
   const note = add("div", "muted", "Previsioni Open-Meteo" + (t.samples.some(s => s.radar !== null) ? " e radar" : "") + ". Ogni punto è controllato all'ora in cui ci arrivi.");
   note.style.fontSize = "11px"; note.style.marginTop = "6px";
   const bt = add("div", "rowbtns");
@@ -1517,7 +1536,7 @@ goBtn.onclick = async () => {
   tripOut.innerHTML = "";
   const msg = (t, cls) => { const d = document.createElement("div"); d.className = cls || "muted"; d.textContent = t; tripOut.appendChild(d); };
   if (!a || !b) { msg("Scegli partenza e arrivo dall'elenco che compare mentre scrivi.", "err"); return; }
-  let dep = depI.value ? new Date(depI.value).getTime() : Date.now();
+  let dep = +depI.value || Date.now();
   if (!(dep > Date.now() - 3600000)) dep = Date.now();
   goBtn.disabled = true; msg("Calcolo il percorso e controllo la pioggia…");
   try {
