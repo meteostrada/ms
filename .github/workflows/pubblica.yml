@@ -1,4 +1,7 @@
-# Ogni 10 minuti: converte il radar europeo OPERA in tessere e ripubblica il sito.
+# Converte il radar europeo (OPERA) e il satellite (NOAA) in tessere e ripubblica il sito, circa ogni 10 minuti.
+# Il timer di GitHub (schedule) non e' affidabile: sul repository nuovo non e' mai partito. Per questo, quando il flusso
+# e' avviato a mano (workflow_dispatch) o dal giro precedente, il job "prossima" dopo 9 minuti accoda il giro successivo:
+# la catena prosegue da sola dentro GitHub. Se si ferma, basta Actions > Pubblica sito e radar > Run workflow.
 name: Pubblica sito e radar
 on:
   schedule:
@@ -53,6 +56,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  prossima:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: sleep 540
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pubblica.yml --repo "$GITHUB_REPOSITORY" --ref main
   pubblica:
     needs: costruisci
     runs-on: ubuntu-latest
