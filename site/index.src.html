@@ -313,6 +313,11 @@ const DATA_Z = 7;        // le tessere del radar sono al livello 7 (circa 0,9 km
 const STEP = 5 * 60000;
 // stessi livelli e colori dell'app
 const LEVELS = [0.3, 1, 2.5, 8, 30, 60];
+// Neve: dove la temperatura a 2 m e' di 1 grado o meno, la precipitazione si colora in bianco-lilla (scuro) o grigio-viola (chiaro)
+const SNOW_DARK = [[0xEB, 0xF0, 0xFA, 190], [0xD7, 0xE1, 0xFA, 210], [0xBE, 0xC8, 0xFA, 225], [0xAA, 0xA0, 0xF5, 235], [0x96, 0x78, 0xEB, 240], [0x82, 0x5A, 0xE1, 245]];
+const SNOW_LIGHT = [[0x96, 0xA5, 0xBE, 200], [0x78, 0x8C, 0xB9, 215], [0x5F, 0x73, 0xB4, 225], [0x55, 0x5A, 0xAF, 235], [0x50, 0x46, 0xA5, 240], [0x4B, 0x32, 0x96, 245]];
+const SNOW = SNOW_DARK.map(c => c.slice());
+const SNOW_MAX_T = 1;      // gradi: da qui in giu' si considera neve
 const COLORS = [
   [0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205],
   [0xFF, 0xD2, 0x1F, 225], [0xFF, 0x45, 0x1A, 235], [0xD8, 0x2B, 0xF5, 240],
@@ -329,6 +334,10 @@ function buildLegend() {
     d.innerHTML = `<i style="background:rgba(${c[0]},${c[1]},${c[2]},${c[3]/255});border-color:${edge}"></i>${NAMES[i]}`;
     lg.appendChild(d);
   });
+  const sn = document.createElement("div"); sn.dataset.gen = "1";
+  const sc = SNOW[2], se = `rgb(${sc[0]*.7|0},${sc[1]*.7|0},${sc[2]*.7|0})`;
+  sn.innerHTML = `<i style="background:rgba(${sc[0]},${sc[1]},${sc[2]},${sc[3]/255});border-color:${se}"></i>Neve (aria a 1 °C o meno, stima)`;
+  lg.appendChild(sn);
   const nt = document.createElement("div"); nt.dataset.gen = "1";
   nt.style.cssText = "margin-top:8px;font-size:11px;line-height:1.35;opacity:.7;display:block";
   nt.textContent = "Fuori da Italia ed Europa la pioggia è una stima da satellite, con circa mezz'ora di ritardo.";
@@ -436,9 +445,9 @@ const L_LAND = 1, L_COAST = 2, L_LAKES = 3, L_RIVERS = 4, L_BORDERS = 5, L_REGIO
 const RAIN_DARK = [[0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205], [0xFF, 0xD2, 0x1F, 225], [0xFF, 0x45, 0x1A, 235], [0xD8, 0x2B, 0xF5, 240]];
 const RAIN_LIGHT = [[0x4F, 0xB4, 0xE8, 175], [0x1E, 0x88, 0xE5, 200], [0x1A, 0x4F, 0xD0, 220], [0xF2, 0xB1, 0x00, 235], [0xE5, 0x3A, 0x12, 240], [0xB0, 0x1F, 0xD6, 245]];
 const THEMES = {
-  dark:   { name: "Scuro",    rain: RAIN_DARK,  map: { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
+  dark:   { name: "Scuro",    rain: RAIN_DARK, snow: SNOW_DARK,  map: { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
             region: "#3B5470", border: "#6F87A3", major: "#C9A44A", minor: "#7A6A4A", dot: "#D7E3F0", label: "#B9C9DB", shadow: "rgba(0,0,0,.78)" } },
-  light1: { name: "Chiaro", rain: RAIN_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
+  light1: { name: "Chiaro", rain: RAIN_LIGHT, snow: SNOW_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
             region: "#C4C9D1", border: "#9CA6B3", major: "#E3A53A", minor: "#D8CDB6", dot: "#44546B", label: "#33425A", shadow: "rgba(255,255,255,.9)" } },
 };
 const THEME_ORDER = ["dark", "light1"];
@@ -883,6 +892,61 @@ function dataTile(t, zl, x, y) {
   return p;
 }
 
+// ---------------------------------------------------------------- temperatura (per distinguere neve e pioggia)
+// Una griglia di punti sulla zona che si guarda (una sola richiesta a Open-Meteo), poi interpolata.
+// E' un'indicazione: la temperatura e' quella dell'aria a 2 m, la quota reale puo' cambiare le cose.
+const tempGrids = [];
+let tempBusy = false, tempTimer = 0;
+const TG_NX = 9, TG_NY = 7;
+function viewBounds() {
+  const n = worldSize(), x0 = view.mx - W / 2 / n, x1 = view.mx + W / 2 / n, y0 = view.my - H / 2 / n, y1 = view.my + H / 2 / n;
+  const lat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * clamp(y, 0, 1)))) * 180 / Math.PI;
+  return { lon0: clamp(x0, 0, 1) * 360 - 180, lon1: clamp(x1, 0, 1) * 360 - 180, lat1: Math.min(LAT_N, lat(y0)), lat0: Math.max(LAT_S, lat(y1)) };
+}
+function tempSoon() {
+  if (!radarOn || tempBusy) return;
+  clearTimeout(tempTimer);
+  tempTimer = setTimeout(fetchTempGrid, 700);
+}
+async function fetchTempGrid() {
+  if (!radarOn || tempBusy) return;
+  const b = viewBounds();
+  if (!(b.lon1 > b.lon0 && b.lat1 > b.lat0)) return;
+  // gia' coperta da una griglia abbastanza fine?
+  const needD = (b.lon1 - b.lon0) / (TG_NX - 1);
+  if (tempGrids.some(g => g.lon0 <= b.lon0 + 1e-6 && g.lon0 + g.dlon * (g.nx - 1) >= b.lon1 - 1e-6 &&
+      g.lat0 <= b.lat0 + 1e-6 && g.lat0 + g.dlat * (g.ny - 1) >= b.lat1 - 1e-6 && g.dlon <= needD * 1.6)) return;
+  const mx = (b.lon1 - b.lon0) * 0.12, my = (b.lat1 - b.lat0) * 0.12;
+  const lon0 = Math.max(-180, b.lon0 - mx), lon1 = Math.min(180, b.lon1 + mx), lat0 = Math.max(LAT_S, b.lat0 - my), lat1 = Math.min(LAT_N, b.lat1 + my);
+  const g = { lon0, lat0, nx: TG_NX, ny: TG_NY, dlon: (lon1 - lon0) / (TG_NX - 1), dlat: (lat1 - lat0) / (TG_NY - 1), t: new Float32Array(TG_NX * TG_NY) };
+  const la = [], lo = [];
+  for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) { la.push((g.lat0 + j * g.dlat).toFixed(2)); lo.push((g.lon0 + i * g.dlon).toFixed(2)); }
+  tempBusy = true;
+  try {
+    const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=" + la.join(",") + "&longitude=" + lo.join(",") + "&current=temperature_2m&timezone=UTC");
+    if (!r.ok) throw new Error(String(r.status));
+    const j = await r.json(), arr = Array.isArray(j) ? j : [j];
+    arr.forEach((x, k) => { const v = x.current && x.current.temperature_2m; g.t[k] = v == null ? 99 : v; });
+    tempGrids.push(g); if (tempGrids.length > 8) tempGrids.shift();
+    rainCache.clear(); dirty = true;
+  } catch { /* senza temperatura la pioggia resta pioggia */ }
+  tempBusy = false;
+}
+// temperatura interpolata in un punto; null se nessuna griglia lo copre
+function tempAt(lat, lon) {
+  let best = null;
+  for (const g of tempGrids) {
+    const fx = (lon - g.lon0) / g.dlon, fy = (lat - g.lat0) / g.dlat;
+    if (fx < 0 || fy < 0 || fx > g.nx - 1 || fy > g.ny - 1) continue;
+    if (!best || g.dlon < best.dlon) best = g;
+  }
+  if (!best) return null;
+  const g = best, fx = (lon - g.lon0) / g.dlon, fy = (lat - g.lat0) / g.dlat;
+  const i = Math.min(g.nx - 2, Math.floor(fx)), j = Math.min(g.ny - 2, Math.floor(fy)), wx = fx - i, wy = fy - j;
+  const t = (a, b) => g.t[b * g.nx + a];
+  return (t(i, j) * (1 - wx) + t(i + 1, j) * wx) * (1 - wy) + (t(i, j + 1) * (1 - wx) + t(i + 1, j + 1) * wx) * wy;
+}
+
 // ---------------------------------------------------------------- radar: disegno di una tessera
 // Si legge la griglia dei dati, la si rende morbida (interpolazione) e per ogni livello si
 // disegna una fascia piena con un bordo più scuro: le stesse macchie nette dell'app.
@@ -961,11 +1025,27 @@ async function renderRain(t, z, tx, ty) {
   if (!any) return cv;
   const c = cv.getContext("2d");
   const img = c.createImageData(256, 256), d = img.data;
+  // neve o pioggia? la temperatura si legge su un reticolo di 17x17 punti della tessera e si interpola
+  let tl = null;
+  if (tempGrids.length) {
+    const S = 17, wz = 256 * Math.pow(2, z); tl = new Float32Array(S * S);
+    for (let b = 0; b < S; b++) for (let a = 0; a < S; a++) {
+      const u = (tx * 256 + a * 16) / wz, v = (ty * 256 + b * 16) / wz;
+      const t = tempAt(Math.atan(Math.sinh(Math.PI * (1 - 2 * v))) * 180 / Math.PI, u * 360 - 180);
+      tl[b * S + a] = t === null ? 99 : t;
+    }
+  }
+  const isSnow = (x, y) => {
+    if (!tl) return false;
+    const fx = x / 16, fy = y / 16, a = Math.min(15, Math.floor(fx)), b = Math.min(15, Math.floor(fy)), wx = fx - a, wy = fy - b;
+    const q = (i, j) => tl[j * 17 + i];
+    return (q(a, b) * (1 - wx) + q(a + 1, b) * wx) * (1 - wy) + (q(a, b + 1) * (1 - wx) + q(a + 1, b + 1) * wx) * wy <= SNOW_MAX_T;
+  };
   for (let y = 0; y < 256; y++) {
     for (let x = 0; x < 256; x++) {
       const i = y * 256 + x, l = lv[i];
       if (l < 0) continue;
-      const col = COLORS[l];
+      const col = isSnow(x, y) ? SNOW[l] : COLORS[l];
       // bordo: dove il vicino (a destra o sotto) è a un livello più basso
       const r = x < 255 ? lv[i + 1] : l, b = y < 255 ? lv[i + 256] : l;
       const l0 = x > 0 ? lv[i - 1] : l, u = y > 0 ? lv[i - 256] : l;
@@ -1007,6 +1087,7 @@ function rainTile(t, z, x, y) {
 
 // ---------------------------------------------------------------- disegno
 const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 3, 11);
+let radarOn = false, radarTimers = [];
 let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
 
 let statusTimer = null;
@@ -1039,6 +1120,7 @@ function drawLayer(fn, z) {
 }
 
 function draw() {
+  if (radarOn) tempSoon();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = MC.ocean; ctx.fillRect(0, 0, W, H);
   const bz = clamp(Math.round(view.zoom), 2, 14);
@@ -1655,6 +1737,7 @@ function applyTheme(name, announce) {
   const T = THEMES[name];
   Object.assign(MC, T.map);
   T.rain.forEach((c, i) => { COLORS[i] = c.slice(); });
+  T.snow.forEach((c, i) => { SNOW[i] = c.slice(); });
   document.documentElement.dataset.theme = name;
   baseCache.clear(); rainCache.clear(); buildLegend();
   try { localStorage.setItem("ms-theme", name); } catch {}
@@ -1673,7 +1756,6 @@ window.__ms = { view, get trip() { return trip; }, setView, get frames() { retur
 loadMap().catch(e => setStatus("Mappa non caricata"));
 
 // La mappa parte senza pioggia: il radar si carica solo quando si preme il pulsante (e si aggiorna finche' resta acceso).
-let radarOn = false, radarTimers = [];
 const radarBtn = document.getElementById("radarBtn");
 async function radarStart() {
   radarOn = true; radarBtn.classList.add("on", "busy"); document.body.classList.add("radar");
