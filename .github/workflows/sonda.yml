@@ -1,5 +1,5 @@
-# Sonda: prepara la mappa del mondo e guarda i dati satellitari NOAA. Si lancia a mano.
-name: Sonda mondo
+# Sonda: guarda i dati satellitari NOAA. Si lancia a mano.
+name: Sonda NOAA
 on:
   workflow_dispatch:
 permissions:
@@ -14,27 +14,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -q shapely h5py numpy matplotlib pillow
-      - name: Mappa del mondo
-        run: |
-          set +e
-          mkdir -p out/ne && cd out
-          for n in ne_50m_land ne_50m_lakes ne_50m_admin_0_boundary_lines_land ne_10m_populated_places; do
-            curl -sSL -o ne/$n.geojson "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/$n.geojson"
-          done
-          ls -la ne
-          python3 ../repo/tools/mondo.py ne > mondo.log 2>&1; cat mondo.log
+      - run: pip install -q h5py numpy pillow
       - name: NOAA
         run: |
           set +e
-          cd out
-          python3 ../repo/tools/sonda/noaa_sonda.py > noaa.log 2>&1; cat noaa.log
-          python3 ../repo/tools/sonda/noaa_leggi.py > leggi.log 2>&1; cat leggi.log
+          mkdir out && cd out
+          python3 ../repo/tools/sonda/noaa_parti.py > parti.log 2>&1; cat parti.log
       - name: Salva
         if: always()
         run: |
-          cd out && rm -rf ne
+          cd out
           git init -q -b sonda-dati
           git config user.name sonda; git config user.email sonda@example.com
-          git add -A && git commit -qm "sonda mondo"
+          git add -A && git commit -qm "sonda noaa"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" sonda-dati
