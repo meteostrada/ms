@@ -313,10 +313,7 @@ const DATA_Z = 7;        // le tessere del radar sono al livello 7 (circa 0,9 km
 const STEP = 5 * 60000;
 // stessi livelli e colori dell'app
 const LEVELS = [0.3, 1, 2.5, 8, 30, 60];
-// Neve: dove la temperatura a 2 m e' di 1 grado o meno, la precipitazione si colora in bianco-lilla (scuro) o grigio-viola (chiaro)
-const SNOW_DARK = [[0xEB, 0xF0, 0xFA, 190], [0xD7, 0xE1, 0xFA, 210], [0xBE, 0xC8, 0xFA, 225], [0xAA, 0xA0, 0xF5, 235], [0x96, 0x78, 0xEB, 240], [0x82, 0x5A, 0xE1, 245]];
-const SNOW_LIGHT = [[0x96, 0xA5, 0xBE, 200], [0x78, 0x8C, 0xB9, 215], [0x5F, 0x73, 0xB4, 225], [0x55, 0x5A, 0xAF, 235], [0x50, 0x46, 0xA5, 240], [0x4B, 0x32, 0x96, 245]];
-const SNOW = SNOW_DARK.map(c => c.slice());
+// Neve: dove la temperatura a 2 m e' di 1 grado o meno, sopra la pioggia (che resta colorata per intensita') si disegnano dei fiocchi
 const SNOW_MAX_T = 1;      // gradi: da qui in giu' si considera neve
 const COLORS = [
   [0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205],
@@ -335,8 +332,7 @@ function buildLegend() {
     lg.appendChild(d);
   });
   const sn = document.createElement("div"); sn.dataset.gen = "1";
-  const sc = SNOW[2], se = `rgb(${sc[0]*.7|0},${sc[1]*.7|0},${sc[2]*.7|0})`;
-  sn.innerHTML = `<i style="background:rgba(${sc[0]},${sc[1]},${sc[2]},${sc[3]/255});border-color:${se}"></i>Neve (aria a 1 °C o meno, stima)`;
+  sn.innerHTML = `<i style="border:0;background:none;width:14px;height:14px;font-style:normal;text-align:center;line-height:14px;font-size:15px">❄</i>Neve (aria a 1 °C o meno, stima)`;
   lg.appendChild(sn);
   const nt = document.createElement("div"); nt.dataset.gen = "1";
   nt.style.cssText = "margin-top:8px;font-size:11px;line-height:1.35;opacity:.7;display:block";
@@ -445,9 +441,9 @@ const L_LAND = 1, L_COAST = 2, L_LAKES = 3, L_RIVERS = 4, L_BORDERS = 5, L_REGIO
 const RAIN_DARK = [[0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205], [0xFF, 0xD2, 0x1F, 225], [0xFF, 0x45, 0x1A, 235], [0xD8, 0x2B, 0xF5, 240]];
 const RAIN_LIGHT = [[0x4F, 0xB4, 0xE8, 175], [0x1E, 0x88, 0xE5, 200], [0x1A, 0x4F, 0xD0, 220], [0xF2, 0xB1, 0x00, 235], [0xE5, 0x3A, 0x12, 240], [0xB0, 0x1F, 0xD6, 245]];
 const THEMES = {
-  dark:   { name: "Scuro",    rain: RAIN_DARK, snow: SNOW_DARK,  map: { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
+  dark:   { name: "Scuro",    rain: RAIN_DARK,  map: { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
             region: "#3B5470", border: "#6F87A3", major: "#C9A44A", minor: "#7A6A4A", dot: "#D7E3F0", label: "#B9C9DB", shadow: "rgba(0,0,0,.78)" } },
-  light1: { name: "Chiaro", rain: RAIN_LIGHT, snow: SNOW_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
+  light1: { name: "Chiaro", rain: RAIN_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
             region: "#C4C9D1", border: "#9CA6B3", major: "#E3A53A", minor: "#D8CDB6", dot: "#44546B", label: "#33425A", shadow: "rgba(255,255,255,.9)" } },
 };
 const THEME_ORDER = ["dark", "light1"];
@@ -1045,7 +1041,7 @@ async function renderRain(t, z, tx, ty) {
     for (let x = 0; x < 256; x++) {
       const i = y * 256 + x, l = lv[i];
       if (l < 0) continue;
-      const col = isSnow(x, y) ? SNOW[l] : COLORS[l];
+      const col = COLORS[l];
       // bordo: dove il vicino (a destra o sotto) è a un livello più basso
       const r = x < 255 ? lv[i + 1] : l, b = y < 255 ? lv[i + 256] : l;
       const l0 = x > 0 ? lv[i - 1] : l, u = y > 0 ? lv[i - 256] : l;
@@ -1056,6 +1052,22 @@ async function renderRain(t, z, tx, ty) {
     }
   }
   c.putImageData(img, 0, 0);
+  // fiocchi di neve sopra la precipitazione fredda: una griglia sfalsata, solo dove piove/nevica davvero
+  if (tl) {
+    const STEP = 22, light = themeName !== "dark";
+    c.lineCap = "round";
+    for (let gy = 0, row = 0; gy < 256 + STEP; gy += STEP * 0.87, row++) {
+      for (let gx = (row % 2) * STEP / 2; gx < 256 + STEP; gx += STEP) {
+        const px = Math.floor(gx), py = Math.floor(gy);
+        if (px > 255 || py > 255 || lv[py * 256 + px] < 0 || !isSnow(px, py)) continue;
+        for (const [w, col] of [[3.4, light ? "rgba(255,255,255,.85)" : "rgba(10,20,40,.7)"], [1.5, light ? "#33425A" : "#FFFFFF"]]) {
+          c.strokeStyle = col; c.lineWidth = w; c.beginPath();
+          for (let k = 0; k < 3; k++) { const a = k * Math.PI / 3, dx = Math.cos(a) * 5.5, dy = Math.sin(a) * 5.5; c.moveTo(px - dx, py - dy); c.lineTo(px + dx, py + dy); }
+          c.stroke();
+        }
+      }
+    }
+  }
   return cv;
 }
 
@@ -1737,7 +1749,6 @@ function applyTheme(name, announce) {
   const T = THEMES[name];
   Object.assign(MC, T.map);
   T.rain.forEach((c, i) => { COLORS[i] = c.slice(); });
-  T.snow.forEach((c, i) => { SNOW[i] = c.slice(); });
   document.documentElement.dataset.theme = name;
   baseCache.clear(); rainCache.clear(); buildLegend();
   try { localStorage.setItem("ms-theme", name); } catch {}
