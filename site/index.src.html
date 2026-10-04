@@ -1263,7 +1263,7 @@ const mmTxt = v => (v < 10 ? v.toFixed(1) : Math.round(v)).toString().replace(".
 
 async function forecastAt(points) {
   const q = "latitude=" + points.map(p => p.lat.toFixed(3)).join(",") + "&longitude=" + points.map(p => p.lon.toFixed(3)).join(",") +
-    "&minutely_15=precipitation&hourly=precipitation,precipitation_probability,weather_code&timeformat=unixtime&timezone=UTC&forecast_days=3";
+    "&minutely_15=precipitation&hourly=precipitation,precipitation_probability,weather_code,temperature_2m,snowfall&timeformat=unixtime&timezone=UTC&forecast_days=3";
   const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
   if (!r.ok) throw new Error("previsioni " + r.status);
   const j = await r.json();
@@ -1272,7 +1272,7 @@ async function forecastAt(points) {
 // mm/h e temporale previsti in quel punto a quell'ora
 function modelAt(res, t) {
   const sec = Math.floor(t / 1000);
-  let mm = null, thunder = false, prob = null;
+  let mm = null, thunder = false, prob = null, temp = null, snowCm = 0, snow = false, glaze = false, wet = false;
   const m = res.minutely_15;
   if (m && m.time && m.precipitation) {
     const i = Math.floor((sec - m.time[0]) / 900);
@@ -1285,9 +1285,17 @@ function modelAt(res, t) {
       if (mm === null && h.precipitation && h.precipitation[i] != null) mm = h.precipitation[i];
       if (h.weather_code && h.weather_code[i] >= 95) thunder = true;
       if (h.precipitation_probability && h.precipitation_probability[i] != null) prob = h.precipitation_probability[i];
+      if (h.temperature_2m && h.temperature_2m[i] != null) temp = h.temperature_2m[i];
+      if (h.snowfall && h.snowfall[i] != null) snowCm = h.snowfall[i];
+      const c = h.weather_code ? h.weather_code[i] : 0;
+      snow = (c >= 71 && c <= 77) || c === 85 || c === 86 || snowCm > 0;
+      glaze = c === 56 || c === 57 || c === 66 || c === 67;
+      // strada bagnata: piove adesso o e' piovuto nell'ora prima
+      wet = (h.precipitation && ((h.precipitation[i] || 0) > 0.1 || (i > 0 && (h.precipitation[i - 1] || 0) >= 0.2))) || false;
     }
   }
-  return { mm: mm === null ? 0 : mm, thunder, prob };
+  if (mm !== null && mm > 0.1) wet = true;
+  return { mm: mm === null ? 0 : mm, thunder, prob, temp, snowCm, snow, glaze, wet };
 }
 // pioggia vista dal radar in quel punto (massimo attorno, circa 2,5 km); null se fuori copertura
 async function radarAt(lat, lon) {
@@ -1387,6 +1395,14 @@ attachAutocomplete(q, async p => {
         if (v.mm > max) max = v.mm;
         if (v.thunder) thunder = true;
       }
+      const w = modelAt(fc[0], Date.now());
+      if (w.temp !== null) {
+        const bits = ["Temperatura " + tempTxt(w.temp)];
+        if (w.snow) bits.push("sta nevicando");
+        else if (w.glaze || (w.wet && w.temp <= 3)) bits.push("strada bagnata: possibile ghiaccio");
+        else if (w.temp <= 1) bits.push("rischio ghiaccio sulle strade bagnate");
+        out.push(bits.join(", ") + ".");
+      }
       out.push(first === null ? "Prossime 3 ore: nessuna pioggia prevista."
         : "Prossime 3 ore: pioggia dalle " + fmtTime(first) + ", fino a " + mmTxt(max) + (thunder ? ", possibili temporali" : "") + ".");
     } else out.push("Previsioni non raggiungibili.");
@@ -1458,6 +1474,11 @@ async function computeTrip(a, b, dep) {
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i], m = modelAt(fcs[i] || {}, s.eta);
     s.model = m.mm; s.thunder = m.thunder; s.prob = m.prob; s.radar = null;
+    s.temp = m.temp; s.snow = m.snow; s.snowCm = m.snowCm;
+    // ghiaccio: gelicidio, oppure strada bagnata con aria vicina allo zero (come nell'app; l'asfalto e' piu' freddo dell'aria)
+    s.ice = !m.snow && (m.glaze || (m.wet && m.temp !== null && m.temp <= 3));
+    s.iceLvl = !s.ice ? -1 : (m.glaze || (m.temp !== null && m.temp <= -1)) ? 2 : (m.temp !== null && m.temp <= 1) ? 1 : 0;
+    s.snowLvl = !m.snow ? -1 : m.snowCm >= 2 ? 2 : m.snowCm >= 0.5 ? 1 : 0;
     // nei primi 45 minuti conta anche quello che il radar vede adesso
     if (s.eta - nowT <= 45 * 60000 && s.eta > nowT - 30 * 60000) s.radar = await radarAt(s.lat, s.lon);
     s.mmh = Math.max(s.model, s.radar || 0);
@@ -1465,6 +1486,22 @@ async function computeTrip(a, b, dep) {
   }
   return { route, verts, samples, dep, total, arr: dep + route.dur * 1000, from: a, to: b };
 }
+
+// tratti consecutivi in cui una condizione (neve, ghiaccio) e' vera
+function groupBy(t, pred, lvlOf) {
+  const groups = []; let cur = null;
+  for (const s of t.samples) { if (pred(s)) { if (!cur) groups.push(cur = []); cur.push(s); } else cur = null; }
+  return groups.map(g => {
+    const worst = g.reduce((m, s) => lvlOf(s) > lvlOf(m) ? s : m, g[0]), mid = g[Math.floor(g.length / 2)];
+    const probs = g.map(x => x.prob).filter(v => v != null);
+    const temps = g.map(x => x.temp).filter(v => v != null);
+    return { g, worst, place: nearestPlace(mid, 25, 5), t0: g[0].eta, t1: g.at(-1).eta, k0: g[0].km, k1: g.at(-1).km,
+      lvl: lvlOf(worst), prob: probs.length ? Math.max(...probs) : null, tmin: temps.length ? Math.min(...temps) : null };
+  });
+}
+const SNOW_NAMES = ["Neve debole", "Neve moderata", "Neve forte"];
+const ICE_NAMES = ["Ghiaccio possibile", "Ghiaccio probabile", "Ghiaccio quasi certo"];
+const tempTxt = v => Math.round(v) + " °C";
 
 function groupHazards(t) {
   const groups = []; let cur = null;
@@ -1489,20 +1526,43 @@ function renderTrip(t, out) {
   out.innerHTML = "";
   const add = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; out.appendChild(e); return e; };
   const hz = groupHazards(t), worst = hz.reduce((m, h) => Math.max(m, h.lvl), -1);
+  const sg = groupBy(t, s => s.snow, s => s.snowLvl), ig = groupBy(t, s => s.ice, s => s.iceLvl);
   const sum = add("div", "sum");
   sum.innerHTML = `<b></b><div class="muted"></div>`;
-  sum.firstChild.textContent = hz.length ? (hz.length === 1 ? "Un tratto con pioggia" : hz.length + " tratti con pioggia") : "Nessuna pioggia forte sul percorso";
+  const heads = [];
+  if (hz.length) heads.push(hz.length === 1 ? "un tratto con pioggia" : hz.length + " tratti con pioggia");
+  if (sg.length) heads.push(sg.length === 1 ? "un tratto con neve" : sg.length + " tratti con neve");
+  if (ig.length) heads.push(ig.length === 1 ? "rischio ghiaccio" : "rischio ghiaccio in " + ig.length + " tratti");
+  sum.firstChild.textContent = heads.length ? heads.join(", ").replace(/^./, c => c.toUpperCase()) : "Nessuna pioggia forte, neve o ghiaccio sul percorso";
   sum.lastChild.textContent = `${Math.round(t.total)} km · ${durTxt(t.arr - t.dep)} · arrivo alle ${fmtTime(t.arr)}` + (t.route.approx ? " (linea retta, stima)" : "");
   // barra del percorso: un pezzo per ogni tratto tra due punti controllati
   const strip = add("div", "strip");
   for (let i = 0; i < t.samples.length - 1; i++) {
     const a = t.samples[i], b = t.samples[i + 1], e = document.createElement("i");
     e.style.flex = String(Math.max(0.0001, b.km - a.km));
-    e.style.background = rgb(Math.max(a.lvl, b.lvl));
+    const rl = Math.max(a.lvl, b.lvl);
+    // dove non piove forte ma c'e' neve o ghiaccio, il pezzo prende il loro colore
+    e.style.background = rl >= 1 || !(a.snow || b.snow || a.ice || b.ice) ? rgb(rl) : (a.snow || b.snow) ? "#E8F1FA" : "#7FD6E8";
     strip.appendChild(e);
   }
   add("div", "stripLab", `<span>${fmtTime(t.dep)}</span><span>${fmtTime(t.arr)}</span>`);
   if (!hz.length) add("div", "muted", "Fino a 1 mm/h non si considera. Controlla ancora prima di partire: le previsioni cambiano.");
+  const winterRow = (h, emoji, names) => {
+    const row = add("div", "haz");
+    const dot = document.createElement("span"); dot.textContent = emoji; dot.style.cssText = "font-size:16px;line-height:1;margin-top:2px"; row.appendChild(dot);
+    const body = document.createElement("div"); row.appendChild(body);
+    const title = document.createElement("b"); title.textContent = names[h.lvl] + (h.tmin !== null ? " · fino a " + tempTxt(h.tmin) : "");
+    const lead = leadH(h.t0), HR = 3600000;
+    const when = lead > 6 ? "tra le " + fmtTime(Math.floor(h.t0 / HR) * HR - HR) + " e le " + fmtTime(Math.ceil(h.t1 / HR) * HR + HR)
+      : h.t0 === h.t1 ? "intorno alle " + fmtTime(h.t0) : "dalle " + fmtTime(h.t0) + " alle " + fmtTime(h.t1);
+    const where = (h.place ? "vicino a " + h.place.name + ", " : "") + (h.k0 === h.k1 ? "km " + Math.round(h.k0) : "km " + Math.round(h.k0) + "–" + Math.round(h.k1));
+    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where + " · " + confTxt(lead);
+    body.append(title, sub);
+    row.onclick = () => flyTo(h.worst.lat, h.worst.lon, 9.5);
+  };
+  for (const h of sg) winterRow(h, "❄️", SNOW_NAMES);
+  for (const h of ig) winterRow(h, "🧊", ICE_NAMES);
+  if (ig.length) { const n = add("div", "muted", "Il ghiaccio è una stima: l'asfalto, soprattutto di notte, su ponti e in ombra, è più freddo dell'aria."); n.style.fontSize = "11px"; }
   for (const h of hz) {
     const row = add("div", "haz");
     const dot = document.createElement("i"); dot.style.background = rgb(h.lvl); row.appendChild(dot);
