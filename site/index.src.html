@@ -501,7 +501,7 @@ async function loadEuManifest() {
     const j = await r.json();
     const nf = (j.frames || []).map(f => Date.parse(f));
     if (JSON.stringify(nf) !== JSON.stringify(euFrames)) { dataCache.clear(); rainCache.clear(); }
-    euFrames = nf;
+    euFrames = nf; euRawCache.clear();
     euTiles = j.blocks ? new Set(j.blocks) : null;
     euCache.clear(); dirty = true;
   } catch { /* senza Europa resta l'Italia */ }
@@ -576,13 +576,44 @@ function euTile(t, zl, x, y) {
   let p = euCache.get(key);
   if (p) return p;
   p = (async () => {
-    const blk = await getBlock(CFG.eu, best, zl, x >> 2, y >> 2, "eu");
-    const t16 = blk && blk[(y & 3) * 4 + (x & 3)];
-    return t16 ? codeToMm(t16) : null;
+    let out = await euRaw(best, zl, x, y);
+    // Capita che in una foto manchi un radar (la Spagna, spesso): si prendono i pixel mancanti dalle foto vicine,
+    // cosi' il film non salta tra radar e satellite.
+    const gaps = a => { if (!a) return true; for (let i = 0; i < 65536; i++) if (a[i] < 0) return true; return false; };
+    if (gaps(out)) {
+      const idx = euFrames.indexOf(best);
+      for (const off of [-1, 1, -2, 2]) {
+        const nf = euFrames[idx + off];
+        if (nf === undefined || Math.abs(nf - best) > 12 * 60000) continue;
+        const nb = await euRaw(nf, zl, x, y);
+        if (!nb) continue;
+        const merged = out ? Float32Array.from(out) : new Float32Array(65536).fill(-1);
+        let used = false;
+        for (let i = 0; i < 65536; i++) if (merged[i] < 0 && nb[i] >= 0) { merged[i] = nb[i]; used = true; }
+        if (used) out = merged;
+        if (!gaps(out)) break;
+      }
+    }
+    return out;
   })();
   p.catch(() => euCache.delete(key));
   euCache.set(key, p);
   if (euCache.size > 600) euCache.delete(euCache.keys().next().value);
+  return p;
+}
+const euRawCache = new Map();
+function euRaw(best, zl, x, y) {
+  const key = best + "/" + zl + "/" + x + "/" + y;
+  let p = euRawCache.get(key);
+  if (p) return p;
+  p = (async () => {
+    const blk = await getBlock(CFG.eu, best, zl, x >> 2, y >> 2, "eu");
+    const t16 = blk && blk[(y & 3) * 4 + (x & 3)];
+    return t16 ? codeToMm(t16) : null;
+  })();
+  p.catch(() => euRawCache.delete(key));
+  euRawCache.set(key, p);
+  if (euRawCache.size > 300) euRawCache.delete(euRawCache.keys().next().value);
   return p;
 }
 
