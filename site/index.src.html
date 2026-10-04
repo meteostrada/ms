@@ -502,10 +502,47 @@ async function loadEuManifest() {
     const nf = (j.frames || []).map(f => Date.parse(f));
     if (JSON.stringify(nf) !== JSON.stringify(euFrames)) { dataCache.clear(); rainCache.clear(); }
     euFrames = nf;
-    euTiles = j.tiles ? new Set(j.tiles) : null;
+    euTiles = j.blocks ? new Set(j.blocks) : null;
     euCache.clear(); dirty = true;
   } catch { /* senza Europa resta l'Italia */ }
 }
+// Le tessere pubblicate sono raggruppate in blocchi da 4x4 (un PNG da 1024x1024): 16 volte meno richieste.
+// Un blocco decodificato = 16 tessere da 256x256 di codici (Int16: -1 = nessun dato, altrimenti 0..255).
+const blockCache = new Map();
+let bigScratch = null;
+function getBlock(base, best, zl, bx, by, kind) {
+  const key = base + best + "/" + zl + "/" + bx + "/" + by;
+  let p = blockCache.get(key);
+  if (p) return p;
+  p = (async () => {
+    const r = await fetch(`${base}/${stamp(best)}/${zl}/b${bx}_${by}.png`);
+    if (r.status === 404 || r.status === 403) return null;
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const bmp = await createImageBitmap(await r.blob(), BMP_OPTS);
+    if (!bigScratch) { bigScratch = document.createElement("canvas"); bigScratch.width = bigScratch.height = 1024; }
+    const c = bigScratch.getContext("2d", { willReadFrequently: true });
+    c.clearRect(0, 0, 1024, 1024); c.drawImage(bmp, 0, 0);
+    const d = c.getImageData(0, 0, 1024, 1024).data, tiles = new Array(16).fill(null);
+    for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
+      const out = new Int16Array(65536); let any = false;
+      for (let j = 0; j < 256; j++) {
+        let o = ((ty * 256 + j) * 1024 + tx * 256) * 4, k = j * 256;
+        for (let i = 0; i < 256; i++, o += 4, k++) {
+          if (kind === "eu" && d[o + 3] < 128) { out[k] = -1; continue; }
+          out[k] = d[o]; if (d[o] || kind === "eu") any = true;
+        }
+      }
+      if (any) tiles[ty * 4 + tx] = out;
+    }
+    return tiles;
+  })();
+  p.catch(() => blockCache.delete(key));
+  blockCache.set(key, p);
+  if (blockCache.size > 48) blockCache.delete(blockCache.keys().next().value);
+  return p;
+}
+const codeToMm = (a, noData) => { const out = new Float32Array(65536); for (let i = 0; i < 65536; i++) { const v = a[i]; out[i] = v < 0 ? -1 : (v / 255) * (v / 255) * 100; } return out; };
+
 // Il radar europeo copre solo questa parte del mondo: fuori non si chiede nemmeno.
 function inEurope(zl, x, y) {
   const n = 1 << zl, lon0 = x / n * 360 - 180, lon1 = (x + 1) / n * 360 - 180;
@@ -524,14 +561,14 @@ function euTile(t, zl, x, y) {
   if (!euFrames.length) return Promise.resolve(null);
   let best = null;
   for (const f of euFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
-  if (best === null || (zl === DATA_Z && euTiles && !euTiles.has(x + "/" + y))) return Promise.resolve(null);
+  if (best === null || (zl === DATA_Z && euTiles && !euTiles.has((x >> 2) + "/" + (y >> 2)))) return Promise.resolve(null);
   const key = best + "/" + zl + "/" + x + "/" + y;
   let p = euCache.get(key);
   if (p) return p;
   p = (async () => {
-    const r = await fetch(`${CFG.eu}/${stamp(best)}/${zl}/${x}/${y}.png`);
-    if (!r.ok) return null;
-    return euDecode(await createImageBitmap(await r.blob(), BMP_OPTS));
+    const blk = await getBlock(CFG.eu, best, zl, x >> 2, y >> 2, "eu");
+    const t16 = blk && blk[(y & 3) * 4 + (x & 3)];
+    return t16 ? codeToMm(t16) : null;
   })();
   p.catch(() => euCache.delete(key));
   euCache.set(key, p);
@@ -569,12 +606,9 @@ function noaaRaw(best, zl, x, y) {
   let p = noaaCache.get(key);
   if (p) return p;
   p = (async () => {
-    const r = await fetch(`${CFG.noaa}/${stamp(best)}/${zl}/${x}/${y}.png`);
-    if (r.status === 404 || r.status === 403) return new Float32Array(65536);   // nessuna pioggia qui
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS)), out = new Float32Array(65536);
-    for (let i = 0; i < 65536; i++) { const v = px[i * 4] / 255; out[i] = v * v * 100; }
-    return out;
+    const blk = await getBlock(CFG.noaa, best, zl, x >> 2, y >> 2, "noaa");
+    const t16 = blk && blk[(y & 3) * 4 + (x & 3)];
+    return t16 ? codeToMm(t16) : new Float32Array(65536);   // nessuna tessera: nessuna pioggia qui
   })();
   p.catch(() => noaaCache.delete(key));
   noaaCache.set(key, p);

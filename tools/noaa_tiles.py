@@ -10,7 +10,7 @@ import sys, os, io, re, json, math, time, datetime, shutil, urllib.request
 import numpy as np, h5py
 from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import piramide
+import piramide, atlante
 
 B = "https://noaa-enterprise-rainrate-pds.s3.amazonaws.com"
 Z = 6
@@ -102,8 +102,9 @@ for s in slices:
         print(" manca", s, e); continue
     cnt = tiles_for(rain, nm)
     extra = piramide.build(os.path.join(out_dir, nm), Z, 4, False)   # 6 -> 5 -> 4 -> 3
+    blocks = atlante.build(os.path.join(out_dir, nm), False)
     open(os.path.join(out_dir, nm, ".done"), "w").close()
-    print(f" {nm}: {cnt} tessere z{Z} + {extra} dei livelli bassi, celle>=0.3mm/h: {(rain >= 0.3).sum()}")
+    print(f" {nm}: {blocks} blocchi;: {cnt} tessere z{Z} + {extra} dei livelli bassi, celle>=0.3mm/h: {(rain >= 0.3).sum()}")
 frames = [names[s] for s in slices if os.path.exists(os.path.join(out_dir, names[s], ".done"))]
 json.dump({"step": 600, "zoom": Z, "min_zoom": 3, "encoding": "sqrt", "lat": [LAT_MIN, LAT_MAX],
            "frames": [datetime.datetime.strptime(f, "%Y%m%dT%H%M").strftime("%Y-%m-%dT%H:%M:00Z") for f in frames],

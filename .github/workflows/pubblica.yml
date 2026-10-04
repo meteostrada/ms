@@ -28,8 +28,8 @@ jobs:
           path: |
             cache/tiles
             cache/noaa
-          key: tessere2-${{ github.run_id }}
-          restore-keys: tessere2-
+          key: tessere3-${{ github.run_id }}
+          restore-keys: tessere3-
       - name: Sito
         run: python3 tools/build_site.py dist
       - name: Radar europeo in tessere
@@ -42,7 +42,7 @@ jobs:
           mkdir -p dist/tiles dist/noaa
           cp -r cache/tiles/. dist/tiles/
           cp -r cache/noaa/. dist/noaa/ || true
-          find dist/tiles dist/noaa -name .done -delete
+          find dist/tiles dist/noaa \( -name .done -o -name blocchi7.json \) -delete
           du -sh dist
           echo "::notice title=dist::$(du -sh dist | cut -f1), file: $(find dist -type f | wc -l), noaa: $(find dist/noaa -type f 2>/dev/null | wc -l) file $(du -sh dist/noaa 2>/dev/null | cut -f1), tiles: $(du -sh dist/tiles | cut -f1)"
           echo "::notice title=noaa::$(cat dist/noaa/latest.json 2>/dev/null | head -c 400)"

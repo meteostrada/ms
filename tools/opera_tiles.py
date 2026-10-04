@@ -15,7 +15,7 @@ import sys, os, io, json, math, time, datetime, shutil, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np, h5py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import piramide
+import piramide, atlante
 from PIL import Image
 from pyproj import Transformer
 from scipy.ndimage import map_coordinates
@@ -134,6 +134,10 @@ def make_tiles(t, rain, covered):
             Image.fromarray(img, "RGBA").save(p, optimize=True)
             count += 1; size += os.path.getsize(p)
     count += piramide.build(os.path.join(out_dir, name), Z, 5, True)   # livelli 6, 5 e 4 per le viste lontane
+    # elenco dei blocchi di questa foto (per il sito), poi le tessere si raggruppano in blocchi da 4x4
+    blocks7 = sorted({f"{int(x) // 4}/{int(y[:-4]) // 4}" for x in os.listdir(os.path.join(out_dir, name, str(Z))) for y in os.listdir(os.path.join(out_dir, name, str(Z), x))})
+    json.dump(blocks7, open(os.path.join(out_dir, name, "blocchi7.json"), "w"))
+    atlante.build(os.path.join(out_dir, name), True)
     open(os.path.join(out_dir, name, ".done"), "w").close()
     return name, count, size
 
@@ -164,11 +168,8 @@ with ThreadPoolExecutor(3) as ex:
 frames = [t for t in times if os.path.exists(os.path.join(out_dir, f"{t:%Y%m%dT%H%M}", ".done"))]
 tiles = []
 if frames:
-    root = os.path.join(out_dir, f"{frames[-1]:%Y%m%dT%H%M}", str(Z))
-    for x in os.listdir(root):
-        for y in os.listdir(os.path.join(root, x)):
-            tiles.append(f"{x}/{y[:-4]}")
-json.dump({"step": STEP * 60, "zoom": Z, "encoding": "sqrt", "frames": [t.strftime("%Y-%m-%dT%H:%M:00Z") for t in frames], "tiles": tiles,
+    tiles = json.load(open(os.path.join(out_dir, f"{frames[-1]:%Y%m%dT%H%M}", "blocchi7.json")))
+json.dump({"step": STEP * 60, "zoom": Z, "encoding": "sqrt", "frames": [t.strftime("%Y-%m-%dT%H:%M:00Z") for t in frames], "blocks": tiles,
            "updated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
           open(os.path.join(out_dir, "latest.json"), "w"))
-print(f"fatto in {time.time()-t_start:.0f} s: {len(frames)} foto, {len(tiles)} tessere")
+print(f"fatto in {time.time()-t_start:.0f} s: {len(frames)} foto, {len(tiles)} blocchi")
