@@ -700,6 +700,18 @@ async function renderRain(t, z, tx, ty) {
       }
     }
   }
+  // Puntini isolati (disturbi del radar, terreno): una pioggia debole senza vicini non e' pioggia.
+  {
+    const keep = new Uint8Array(rw * rh);
+    for (let y = 1; y < rh - 1; y++) for (let x = 1; x < rw - 1; x++) {
+      const i = y * rw + x, v = region[i];
+      if (v < LEVELS[0] || v >= LEVELS[2]) continue;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && region[i + dy * rw + dx] >= LEVELS[0]) n++;
+      if (n < 3) keep[i] = 1;
+    }
+    for (let i = 0; i < keep.length; i++) if (keep[i]) region[i] = 0;
+  }
   // I dati arrivano a scalini (un byte per pixel): sui bordi della pioggia si ammorbidiscono
   // con una media leggera, ma lasciando intatti i nuclei forti (si tiene il valore più alto).
   {
