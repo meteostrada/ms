@@ -125,6 +125,32 @@ body.radar #bar{display:flex}
 .note{font-size:11.5px!important;color:var(--text2)!important;line-height:1.45!important}
 .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text2);line-height:1.5}
 #infoBtn{display:none}
+/* ---- avviso prima del Play Store: sopra il sito, che sfuma dietro */
+#donate{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:#070B14aa;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+#donate.open{opacity:1;visibility:visible}
+#donate .box{position:relative;width:min(420px,100%);max-height:100%;overflow:auto;padding:26px 22px 20px;border-radius:20px;text-align:center;
+  background:linear-gradient(180deg,#1B2438,#121926);border:1px solid var(--line);box-shadow:0 20px 60px #000a;
+  transform:translateY(14px) scale(.98);transition:transform .25s}
+#donate.open .box{transform:none}
+#donate .heart{width:54px;height:54px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:#FF5A7A22;border:1px solid #FF5A7A55;font-size:26px}
+#donate h2{margin:0 0 8px;font-size:21px;line-height:1.2}
+#donate p{margin:0 0 18px;color:#C9D2E4;font-size:14.5px;line-height:1.5}
+#donate .pay{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+#donate .pay a{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 8px;border-radius:12px;font:600 14.5px system-ui;
+  text-decoration:none;color:#fff;border:1px solid #ffffff30}
+#donate .pay a.kofi{background:#29ABE0}
+#donate .pay a.paypal{background:#0070BA}
+#donate .pay a.off{opacity:.45;pointer-events:none}
+#donate .pay a small{display:block;font-weight:400;font-size:10.5px;opacity:.9}
+#donate .go{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px;border-radius:12px;border:1px solid var(--line);
+  background:transparent;color:var(--text);font:600 14.5px system-ui;cursor:pointer;text-decoration:none}
+#donate .go:hover{background:#ffffff0f}
+#donate .go svg{width:20px;height:20px}
+#donate .go.off{opacity:.55;pointer-events:none}
+#donate .x{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:10px;border:0;background:transparent;color:var(--text2);font-size:17px;cursor:pointer}
+#donate .soonnote{margin:10px 0 0;font-size:11.5px;color:var(--text2)}
+.store{cursor:pointer;width:100%;text-align:left;color:inherit;font:inherit}
 @media (min-width:1000px){ :root.dock{--pw:380px} :root.dock #about{display:block} }
 @media (max-width:999px){ #about{width:100%;border-left:0} #infoBtn{display:grid} }
 @media (min-width:1000px){ :root:not(.dock) #infoBtn{display:grid} }
@@ -180,11 +206,11 @@ body.radar #bar{display:flex}
   </div>
   <p class="lede">Guidi, pedali o cammini e non devi fare niente: l'app capisce da sola dove stai andando e ti avvisa, a voce, di pioggia forte, temporali, vento, nebbia o ghiaccio <b>prima</b> di arrivarci.</p>
 
-  <div class="store soon">
+  <button class="store soon" id="storeBtn" type="button">
     <svg viewBox="0 0 24 24"><path fill="#4FA3E3" d="M3.6 2.3c-.3.2-.5.6-.5 1.1v17.2c0 .5.2.9.5 1.1l9.6-9.7z"/><path fill="#3DBE6B" d="M16.5 8.6 13.2 12l3.3 3.4 3.9-2.2c.8-.5.8-1.6 0-2.1z"/><path fill="#FFD21F" d="M3.6 2.3l9.6 9.7 3.3-3.4L5 2.1c-.5-.3-1-.2-1.4.2z"/><path fill="#FF451A" d="M13.2 12 3.6 21.7c.4.4.9.4 1.4.2l11.5-6.5z"/></svg>
     <div><small>Prossimamente su</small><b>Google Play</b></div>
     <span class="pill">In arrivo</span>
-  </div>
+  </button>
   <p class="note">App Android, gratuita. Senza account e senza pubblicità.</p>
 
   <h3>Cosa fa</h3>
@@ -220,6 +246,24 @@ body.radar #bar{display:flex}
 
   <div class="foot">MeteoStrada è un progetto indipendente e gratuito.<br>Informativa sulla privacy e contatti: in arrivo con l'app.</div>
 </aside>
+
+<div id="donate" role="dialog" aria-modal="true" aria-labelledby="donTitle" aria-hidden="true">
+  <div class="box">
+    <button class="x" id="donClose" aria-label="Chiudi">✕</button>
+    <div class="heart">💙</div>
+    <h2 id="donTitle">Aiutaci a farla crescere</h2>
+    <p>MeteoStrada è gratuita. Se ti è utile, un piccolo contributo ci aiuta a coprire i costi (dati meteo, pubblicazione, Play Store) e a migliorarla.</p>
+    <div class="pay">
+      <a class="kofi off" id="donKofi" target="_blank" rel="noopener">☕ Ko-fi</a>
+      <a class="paypal off" id="donPaypal" target="_blank" rel="noopener">PayPal</a>
+    </div>
+    <a class="go off" id="donGo" rel="noopener">
+      <svg viewBox="0 0 24 24"><path fill="#4FA3E3" d="M3.6 2.3c-.3.2-.5.6-.5 1.1v17.2c0 .5.2.9.5 1.1l9.6-9.7z"/><path fill="#3DBE6B" d="M16.5 8.6 13.2 12l3.3 3.4 3.9-2.2c.8-.5.8-1.6 0-2.1z"/><path fill="#FFD21F" d="M3.6 2.3l9.6 9.7 3.3-3.4L5 2.1c-.5-.3-1-.2-1.4.2z"/><path fill="#FF451A" d="M13.2 12 3.6 21.7c.4.4.9.4 1.4.2l11.5-6.5z"/></svg>
+      <span id="donGoText">Continua al Play Store</span>
+    </a>
+    <p class="soonnote" id="donSoon"></p>
+  </div>
+</div>
 
 <div id="status" class="card"></div>
 
@@ -1242,6 +1286,29 @@ if (window.innerWidth <= 640) setView(null);
   document.getElementById("aboutClose").onclick = () => {
     if (window.innerWidth >= 1000) { aboutOpen = false; save(); resize(); } else about.classList.remove("open");
   };
+}
+
+// avviso prima del Play Store (donazioni). Qui si mettono i link veri; finche' sono vuoti i pulsanti restano spenti.
+const LINKS = { play: "", kofi: "", paypal: "" };
+{
+  const box = document.getElementById("donate"), go = document.getElementById("donGo");
+  const setLink = (el, url) => { if (url) { el.href = url; el.classList.remove("off"); } else { el.removeAttribute("href"); el.classList.add("off"); } };
+  setLink(document.getElementById("donKofi"), LINKS.kofi);
+  setLink(document.getElementById("donPaypal"), LINKS.paypal);
+  setLink(go, LINKS.play);
+  if (!LINKS.play) document.getElementById("donSoon").textContent = "L'app arriva presto su Google Play.";
+  const seen = () => { try { return localStorage.getItem("ms-donate") === "1"; } catch { return false; } };
+  const mark = () => { try { localStorage.setItem("ms-donate", "1"); } catch {} };
+  const open = () => { box.classList.add("open"); box.setAttribute("aria-hidden", "false"); mark(); };
+  const close = () => { box.classList.remove("open"); box.setAttribute("aria-hidden", "true"); };
+  // la prima volta si passa dall'avviso; le volte dopo il pulsante porta diretto al Play Store
+  document.getElementById("storeBtn").onclick = () => {
+    if (LINKS.play && seen()) window.open(LINKS.play, "_blank", "noopener"); else open();
+  };
+  document.getElementById("donClose").onclick = close;
+  box.addEventListener("click", e => { if (e.target === box) close(); });
+  window.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  go.addEventListener("click", close);
 }
 
 let tour = 0;   // 0 Italia, 1 Europa, 2 Mondo
