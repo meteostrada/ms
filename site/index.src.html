@@ -402,19 +402,32 @@ const BMP_OPTS = { colorSpaceConversion: "none", premultiplyAlpha: "none" };
 
 // Italia: radar della Protezione Civile. -1 = nessun dato.
 const dpcCache = new Map();
+// Il radar italiano esiste solo attorno all'Italia: fuori da lì non si chiede nemmeno (meno richieste, niente errori).
+function nearItaly(x, y) {
+  const lon0 = x / 128 * 360 - 180, lon1 = (x + 1) / 128 * 360 - 180;
+  const lat = yy => Math.atan(Math.sinh(Math.PI * (1 - 2 * yy / 128))) * 180 / Math.PI;
+  return lon1 >= 4 && lon0 <= 21 && lat(y) >= 33.5 && lat(y + 1) <= 49.5;
+}
 function dpcTile(t, x, y) {
+  if (!nearItaly(x, y)) return Promise.resolve(null);
   const key = t + "/" + x + "/" + y;
   let p = dpcCache.get(key);
   if (p) return p;
   p = (async () => {
-    const r = await fetch(tileUrl(t, x, y));
-    if (r.status === 403 || r.status === 404) return null;   // fuori copertura o non ancora pubblicata
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS));
-    const out = new Float32Array(65536);
-    // il radar mette 0..100 mm/h nel canale rosso; trasparente = nessun dato
-    for (let i = 0; i < 65536; i++) out[i] = px[i * 4 + 3] < 128 ? -1 : px[i * 4] * (100 / 255);
-    return out;
+    let last;
+    for (let k = 0; k < 3; k++) {      // una rete che inciampa non deve cancellare una tessera: si riprova
+      try {
+        const r = await fetch(tileUrl(t, x, y));
+        if (r.status === 403 || r.status === 404) return null;   // fuori copertura o non ancora pubblicata
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS));
+        const out = new Float32Array(65536);
+        // il radar mette 0..100 mm/h nel canale rosso; trasparente = nessun dato
+        for (let i = 0; i < 65536; i++) out[i] = px[i * 4 + 3] < 128 ? -1 : px[i * 4] * (100 / 255);
+        return out;
+      } catch (e) { last = e; await new Promise(r => setTimeout(r, 500 * (k + 1))); }
+    }
+    throw last;
   })();
   p.catch(() => dpcCache.delete(key));
   dpcCache.set(key, p);
@@ -479,9 +492,13 @@ function dataTile(t, x, y) {
   const key = t + "/" + x + "/" + y;
   let p = dataCache.get(key);
   if (p) return p;
-  p = Promise.all([dpcTile(t, x, y), euReady.then(() => euTile(t, x, y)).catch(() => null)]).then(([d, e]) => {
-    if (!d && !e) return null;
+  let failed = false;
+  p = Promise.all([dpcTile(t, x, y).catch(() => { failed = true; return null; }),
+                   euReady.then(() => euTile(t, x, y)).catch(() => null)]).then(([d, e]) => {
+    if (failed) setTimeout(() => dataCache.delete(key), 0);   // non si ricorda: la prossima volta si riscarica
+    if (!d && !e && !failed) return null;
     const out = new Float32Array(65536);
+    if (failed) out.partial = true;
     for (let i = 0; i < 65536; i++) {
       let v = d ? d[i] : -1;
       if (v < 0) v = e ? e[i] : -1;
@@ -500,6 +517,7 @@ function dataTile(t, x, y) {
 // disegna una fascia piena con un bordo più scuro: le stesse macchie nette dell'app.
 const rainCache = new Map(); // "tempo|z|x|y" -> canvas
 const rainBusy = new Map();
+const rainTries = new Map(), rainNext = new Map();
 const lastDrawn = new Map(); // "z|x|y" -> ultimo canvas mostrato (per non sfarfallare nel film)
 
 async function renderRain(t, z, tx, ty) {
@@ -515,8 +533,10 @@ async function renderRain(t, z, tx, ty) {
       jobs.push(dataTile(t, sx, sy).then(arr => ({ sx, sy, arr })));
     }
   }
+  let partial = false;
   for (const { sx, sy, arr } of await Promise.all(jobs)) {
     if (!arr) continue;
+    if (arr.partial) partial = true;
     for (let y = 0; y < 256; y++) {
       const ry = sy * 256 + y - gy0; if (ry < 0 || ry >= rh) continue;
       for (let x = 0; x < 256; x++) {
@@ -554,6 +574,7 @@ async function renderRain(t, z, tx, ty) {
   }
   const cv = document.createElement("canvas");
   cv.width = cv.height = 256;
+  cv.partial = partial;
   if (!any) return cv;
   const c = cv.getContext("2d");
   const img = c.createImageData(256, 256), d = img.data;
@@ -579,12 +600,22 @@ function rainTile(t, z, x, y) {
   const key = t + "|" + z + "|" + x + "|" + y, lk = z + "|" + x + "|" + y;
   const ready = rainCache.get(key);
   if (ready) { lastDrawn.set(lk, ready); return ready; }
+  const wait = rainNext.get(key);
+  if (wait && wait > Date.now()) return lastDrawn.get(lk) || null;
   if (!rainBusy.has(key)) {
     const pr = renderRain(t, z, x, y).then(cv => {
-      rainCache.set(key, cv);
-      if (rainCache.size > 400) rainCache.delete(rainCache.keys().next().value);
+      const tries = rainTries.get(key) || 0;
+      if (cv.partial && tries < 3) {
+        // qualche tessera non è arrivata: si mostra quello che c'è e si riprova tra poco
+        rainTries.set(key, tries + 1); rainNext.set(key, Date.now() + 15000);
+        lastDrawn.set(lk, cv);
+        setTimeout(() => { dirty = true; }, 15500);
+      } else {
+        rainCache.set(key, cv);
+        if (rainCache.size > 400) rainCache.delete(rainCache.keys().next().value);
+      }
       dirty = true;
-    }).catch(() => { setStatus("Radar non raggiungibile, riprovo…"); })
+    }).catch(() => { setStatus("Radar non raggiungibile, riprovo…", 5000); })
       .finally(() => rainBusy.delete(key));
     rainBusy.set(key, pr);
   }
@@ -595,9 +626,12 @@ function rainTile(t, z, x, y) {
 const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 5, 11);
 let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
 
-function setStatus(msg) {
+let statusTimer = null;
+function setStatus(msg, ms) {
   const s = document.getElementById("status");
   s.textContent = msg || ""; s.style.display = msg ? "block" : "none";
+  clearTimeout(statusTimer);
+  if (msg && ms) statusTimer = setTimeout(() => setStatus(""), ms);
 }
 
 function visibleTiles(z, margin = 0) {
