@@ -1,0 +1,18 @@
+cartella BLEND/RainRate-Blend-INST/2026/10/04/06/ file: 17
+ fascia 2026100406000 [('GLB-2_', 2760), ('GLB-3_', 3721), ('GLB-4_', 4259), ('GLB-5_', 4582)]
+ fascia 2026100406100 [('GLB-4_', 3841), ('GLB-5_', 4577)]
+ fascia 2026100406200 [('GLB-2_', 2766), ('GLB-4_', 4251), ('GLB-5_', 4573)]
+ fascia 2026100406300 [('GLB-2_', 2767), ('GLB-3_', 3730), ('GLB-5_', 4563)]
+ fascia 2026100406400 [('GLB-4_', 3830), ('GLB-5_', 4566)]
+ fascia 2026100406500 [('GLB-2_', 2772), ('GLB-4_', 4238), ('GLB-5_', 4558)]
+scelta 2026100406300
+RRQPE-INST-GLB-2_v1r1_blend_s20261004063 valido 50.3% pioggia>0.3: 2332054 max 51.5
+   lat -60.0..70.0 lon -180.0..180.0
+     Atene: no     Istanbul: no     Tunisi: no     Roma: no     Pavia: no     Cairo: no     Mumbai: no     Tokyo: no     NewYork: sì     SaoPaulo: sì     Sydney: no     Johannesburg: no
+RRQPE-INST-GLB-3_v1r1_blend_s20261004063 valido 73.4% pioggia>0.3: 3316444 max 53.300000000000004
+   lat -60.0..70.0 lon -180.0..180.0
+     Atene: no     Istanbul: no     Tunisi: no     Roma: no     Pavia: no     Cairo: no     Mumbai: no     Tokyo: sì     NewYork: sì     SaoPaulo: sì     Sydney: sì     Johannesburg: no
+RRQPE-INST-GLB-5_v1r1_blend_s20261004063 valido 100.0% pioggia>0.3: 5002642 max 53.300000000000004
+   lat -60.0..70.0 lon -180.0..180.0
+     Atene: sì     Istanbul: sì     Tunisi: sì     Roma: sì     Pavia: sì     Cairo: sì     Mumbai: sì     Tokyo: sì     NewYork: sì     SaoPaulo: sì     Sydney: sì     Johannesburg: sì
+unione valida 100.0%
