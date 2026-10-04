@@ -19,7 +19,7 @@
   color-scheme:dark;
 }
 /* temi chiari: stessi nomi, altri colori */
-:root[data-theme="light1"],:root[data-theme="light2"]{
+:root[data-theme="light1"]{
   --bg:#EEF2F7; --surface:#FFFFFF; --surface2:#F1F4F9; --card:#FFFFFFeb; --line:#0000001f;
   --text:#18212F; --text2:#5A6679; --text3:#38445A; --info:#2A7FCB; --onaccent:#FFFFFF;
   --hover:#00000010; --thumb:#0000002e; --err:#C0392B; --bgfade:#FFFFFFd9;
@@ -432,18 +432,16 @@ const WORLD_B64 = "/*MONDODATA*/";
 const N7 = 256 * 128;
 let MAP = null;
 const L_LAND = 1, L_COAST = 2, L_LAKES = 3, L_RIVERS = 4, L_BORDERS = 5, L_REGIONS = 6, L_URBAN = 7, L_ROADS = 8, L_PLACES = 9;
-// Colori della mappa e della pioggia per ogni tema (scuro = quello di sempre; chiaro 1 = grigio-azzurro; chiaro 2 = carta color sabbia).
+// Colori della mappa e della pioggia per ogni tema (scuro = quello di sempre; chiaro = grigio-azzurro).
 const RAIN_DARK = [[0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205], [0xFF, 0xD2, 0x1F, 225], [0xFF, 0x45, 0x1A, 235], [0xD8, 0x2B, 0xF5, 240]];
 const RAIN_LIGHT = [[0x4F, 0xB4, 0xE8, 175], [0x1E, 0x88, 0xE5, 200], [0x1A, 0x4F, 0xD0, 220], [0xF2, 0xB1, 0x00, 235], [0xE5, 0x3A, 0x12, 240], [0xB0, 0x1F, 0xD6, 245]];
 const THEMES = {
   dark:   { name: "Scuro",    rain: RAIN_DARK,  map: { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
             region: "#3B5470", border: "#6F87A3", major: "#C9A44A", minor: "#7A6A4A", dot: "#D7E3F0", label: "#B9C9DB", shadow: "rgba(0,0,0,.78)" } },
-  light1: { name: "Chiaro 1", rain: RAIN_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
+  light1: { name: "Chiaro", rain: RAIN_LIGHT, map: { ocean: "#C9D9E7", land: "#EEF0F3", urban: "#E2E5EA", coast: "#8FA9BF", river: "#9CC2E2",
             region: "#C4C9D1", border: "#9CA6B3", major: "#E3A53A", minor: "#D8CDB6", dot: "#44546B", label: "#33425A", shadow: "rgba(255,255,255,.9)" } },
-  light2: { name: "Chiaro 2", rain: RAIN_LIGHT, map: { ocean: "#BCD8E6", land: "#F3EBD9", urban: "#EADFC6", coast: "#7FA3B8", river: "#8DBBD8",
-            region: "#D3C7AE", border: "#A89B80", major: "#D98E1F", minor: "#D9C9A4", dot: "#5B4B33", label: "#463826", shadow: "rgba(255,250,238,.92)" } },
 };
-const THEME_ORDER = ["dark", "light1", "light2"];
+const THEME_ORDER = ["dark", "light1"];
 const MC = Object.assign({}, THEMES.dark.map);
 
 async function parseMsm(b64) {
