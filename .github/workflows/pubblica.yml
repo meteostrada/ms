@@ -36,7 +36,7 @@ jobs:
         run: python3 tools/opera_tiles.py cache/tiles 13
       - name: Pioggia da satellite (NOAA) in tessere
         continue-on-error: true
-        run: python3 tools/noaa_tiles.py cache/noaa 7
+        run: python3 tools/noaa_tiles.py cache/noaa 7 2>&1 | tee cache/noaa.log; echo "::notice title=noaa-log::$(tail -n 6 cache/noaa.log | tr '\n' '|' | cut -c1-600)"
       - name: Unisci
         run: |
           mkdir -p dist/tiles dist/noaa
@@ -44,6 +44,8 @@ jobs:
           cp -r cache/noaa/. dist/noaa/ || true
           find dist/tiles dist/noaa -name .done -delete
           du -sh dist
+          echo "::notice title=dist::$(du -sh dist | cut -f1), file: $(find dist -type f | wc -l), noaa: $(find dist/noaa -type f 2>/dev/null | wc -l) file $(du -sh dist/noaa 2>/dev/null | cut -f1), tiles: $(du -sh dist/tiles | cut -f1)"
+          echo "::notice title=noaa::$(cat dist/noaa/latest.json 2>/dev/null | head -c 400)"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
