@@ -62,12 +62,12 @@ def tiles_for(rain, name):
                 continue
             r0 = max(int(rr.min()) - 1, 0); r1 = min(int(rr.max()) + 2, H); c0 = max(int(cc.min()) - 1, 0); c1 = min(int(cc.max()) + 2, W)
             sub = rain[r0:r1, c0:c1]
-            if sub.max() < 0.1:
+            if sub.max() < 0.3:
                 continue
             R, C = np.meshgrid(rr - r0, cc - c0, indexing="ij")
             v = map_coordinates(sub, [R, C], order=1, mode="nearest")
             code = np.rint(np.sqrt(np.clip(v, 0, 100) / 100) * 255).astype(np.uint8)
-            code[v < 0.1] = 0
+            code[v < 0.3] = 0
             if not code.any():
                 continue
             d = os.path.join(out_dir, name, str(Z), str(x)); os.makedirs(d, exist_ok=True)
