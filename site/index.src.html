@@ -515,9 +515,17 @@ function getBlock(base, best, zl, bx, by, kind) {
   let p = blockCache.get(key);
   if (p) return p;
   p = (async () => {
-    const r = await fetch(`${base}/${stamp(best)}/${zl}/b${bx}_${by}.png`);
-    if (r.status === 404 || r.status === 403) return null;
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    let r, last;
+    for (let k = 0; k < 3; k++) {   // il server puo' dire "troppe richieste" o inciampare: si riprova con calma
+      try {
+        r = await fetch(`${base}/${stamp(best)}/${zl}/b${bx}_${by}.png`);
+        if (r.status === 404 || r.status === 403) return null;
+        if (r.ok) break;
+        last = new Error("HTTP " + r.status); r = null;
+      } catch (e) { last = e; r = null; }
+      await new Promise(res => setTimeout(res, 800 * (k + 1) + Math.random() * 400));
+    }
+    if (!r) throw last;
     const bmp = await createImageBitmap(await r.blob(), BMP_OPTS);
     if (!bigScratch) { bigScratch = document.createElement("canvas"); bigScratch.width = bigScratch.height = 1024; }
     const c = bigScratch.getContext("2d", { willReadFrequently: true });
@@ -561,6 +569,8 @@ function euTile(t, zl, x, y) {
   if (!euFrames.length) return Promise.resolve(null);
   let best = null;
   for (const f of euFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
+  const lastEu = euFrames[euFrames.length - 1];
+  if (best === null && lastEu !== undefined && t > lastEu && t - lastEu <= 30 * 60000) best = lastEu;   // l'ultima foto europea e' in ritardo: si usa quella, non il satellite piu' vecchio
   if (best === null || (zl === DATA_Z && euTiles && !euTiles.has((x >> 2) + "/" + (y >> 2)))) return Promise.resolve(null);
   const key = best + "/" + zl + "/" + x + "/" + y;
   let p = euCache.get(key);
@@ -637,8 +647,8 @@ function dataTile(t, zl, x, y) {
   if (p) return p;
   let failed = false;
   p = Promise.all([zl === DATA_Z ? dpcTile(t, x, y).catch(() => { failed = true; return null; }) : null,
-                   euReady.then(() => euTile(t, zl, x, y)).catch(() => null),
-                   noaaTile(t, zl, x, y).catch(() => null)]).then(([d, e, n]) => {
+                   euReady.then(() => euTile(t, zl, x, y)).catch(() => { failed = true; return null; }),
+                   noaaTile(t, zl, x, y).catch(() => { failed = true; return null; })]).then(([d, e, n]) => {
     if (failed) setTimeout(() => dataCache.delete(key), 0);   // non si ricorda: la prossima volta si riscarica
     if (!d && !e && !n && !failed) return null;
     const out = new Float32Array(65536);
