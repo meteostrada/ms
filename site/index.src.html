@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MeteoStrada — radar pioggia</title>
+<meta name="description" content="La pioggia e i temporali in Italia, ogni 5 minuti, con il disegno nitido di MeteoStrada.">
+<style>
+:root{
+  --bg:#0F1420; --surface:#1A2233; --surface2:#232D42; --line:#ffffff22;
+  --text:#F4F6FB; --text2:#9AA5BD; --info:#4FA3E3; --bolt:#FFE600; --ok:#3DBE6B;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
+  -webkit-tap-highlight-color:transparent}
+#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map:active{cursor:grabbing}
+.card{background:#1A2233e6;border:1px solid var(--line);border-radius:14px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+header{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));
+  display:flex;align-items:center;gap:10px;padding:8px 14px 8px 10px;z-index:3}
+header .bolt{width:30px;height:30px;border-radius:8px;background:var(--bg);display:grid;place-items:center}
+header b{font-size:16px;letter-spacing:.2px}
+header span{color:var(--text2);font-size:12px;display:block;margin-top:-1px}
+#side{position:fixed;left:max(12px,env(safe-area-inset-left));top:calc(max(12px,env(safe-area-inset-top)) + 62px);
+  width:min(350px,calc(100% - 76px));z-index:3;display:flex;flex-direction:column;gap:8px}
+.view{padding:12px;font-size:13px}
+.view[hidden]{display:none}
+.view h4{margin:0 0 8px;font:600 10px/1 system-ui;letter-spacing:1.2px;color:var(--text2);text-transform:uppercase}
+#legend div{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px}
+#legend i{width:22px;height:11px;border-radius:3px;display:inline-block;border:1px solid}
+.field{position:relative;display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field>span{font-size:11px;color:var(--text2)}
+.field .row{display:flex;gap:6px}
+input[type=text],input[type=datetime-local]{width:100%;min-width:0;background:#0F1420;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;color-scheme:dark}
+input:focus{outline:2px solid var(--info);outline-offset:0}
+.sm{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:0 10px;font:inherit;font-size:12px;cursor:pointer;flex:none;min-height:38px}
+.primary{width:100%;background:var(--info);color:#06121f;border:0;border-radius:10px;padding:11px;font:600 14px system-ui;cursor:pointer}
+.primary[disabled]{opacity:.5}
+ul.ac{position:absolute;left:0;right:0;top:100%;z-index:6;margin:2px 0 0;padding:4px;list-style:none;background:#232D42;border:1px solid var(--line);border-radius:10px;max-height:240px;overflow:auto}
+ul.ac:empty{display:none}
+ul.ac li{padding:8px 8px;border-radius:7px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+ul.ac li:hover{background:#ffffff14}
+ul.ac small{color:var(--text2);white-space:nowrap}
+#placeInfo,#tripOut{margin-top:6px;line-height:1.45}
+#tripOut{max-height:calc(100vh - 560px);min-height:120px;overflow:auto}
+#placeInfo b{display:block;font-size:16px;margin-bottom:2px}
+.muted{color:var(--text2)}
+.sum{padding:8px 10px;border-radius:10px;background:#0F1420;margin-bottom:8px}
+.sum b{font-size:15px}
+.strip{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:8px 0 2px;background:#0F1420}
+.strip i{display:block;height:100%}
+.stripLab{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:8px}
+.haz{display:flex;gap:10px;padding:8px 6px;border-top:1px solid var(--line);cursor:pointer;align-items:flex-start}
+.haz:hover{background:#ffffff0d}
+.haz i{width:12px;height:12px;border-radius:50%;flex:none;margin-top:3px;border:1px solid #0008}
+.haz b{display:block}
+.err{color:#ff9d8f}
+#clearTrip{margin-top:8px}
+#tripView.compact .field,#tripView.compact #go{display:none}
+#tripView.compact #tripOut{max-height:36vh;margin-top:0}
+.rowbtns{display:flex;gap:8px;margin-top:6px}
+#bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom)) + 22px);
+  width:min(560px,calc(100% - 24px));padding:10px 14px;z-index:3;display:flex;align-items:center;gap:12px}
+#play{width:40px;height:40px;border-radius:50%;border:0;background:var(--info);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none}
+#play svg{width:18px;height:18px;fill:#fff}
+#timeBox{flex:1;min-width:0}
+#timeLabel{display:flex;justify-content:space-between;align-items:baseline;font-variant-numeric:tabular-nums}
+#timeLabel b{font-size:18px}
+#timeLabel span{color:var(--text2);font-size:12px}
+#slider{width:100%;margin:6px 0 0;accent-color:var(--info);height:18px}
+#now{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer;flex:none}
+#now[disabled]{opacity:.4;cursor:default}
+#tools{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:3;display:flex;flex-direction:column;gap:8px}
+#tools button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:#1A2233e6;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center}
+#tools svg{width:20px;height:20px;fill:none;stroke:var(--text);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#status{position:fixed;left:50%;transform:translateX(-50%);top:max(12px,env(safe-area-inset-top));z-index:3;
+  padding:6px 12px;font-size:12px;color:var(--text2);display:none;white-space:nowrap}
+#credits{position:fixed;left:0;right:0;bottom:0;padding:3px 10px max(3px,env(safe-area-inset-bottom));z-index:3;
+  font-size:10.5px;color:var(--text2);background:#0F1420cc;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#credits a{color:var(--text2)}
+@media (max-width:640px){
+  header span{display:none}
+  #side{width:calc(100% - 76px)}
+}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+
+<header class="card">
+  <div class="bolt"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#FFE600" d="M13.6,3.3 L7.0,13.4 L11.3,13.4 L9.4,20.7 L16.8,10.2 L12.6,10.2 L14.8,3.3 Z"/></svg></div>
+  <div><b>MeteoStrada</b><span>Radar della pioggia · Italia ed Europa</span></div>
+</header>
+
+<div id="side">
+  <div id="legend" class="card view">
+    <h4>Intensità</h4>
+  </div>
+  <div id="searchView" class="card view" hidden>
+    <h4>Cerca un luogo</h4>
+    <div class="field"><input id="q" type="text" placeholder="Città o paese" autocomplete="off" autocapitalize="words" spellcheck="false"></div>
+    <div id="placeInfo" class="muted">Scrivi il nome e scegli dall'elenco.</div>
+  </div>
+  <div id="tripView" class="card view" hidden>
+    <h4>Il mio viaggio</h4>
+    <div class="field"><span>Da</span><div class="row"><input id="from" type="text" placeholder="Partenza" autocomplete="off" spellcheck="false"><button class="sm" id="useHere" title="La mia posizione" type="button">Io</button></div></div>
+    <div class="field"><span>A</span><input id="to" type="text" placeholder="Arrivo" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><span>Partenza</span><div class="row"><input id="dep" type="datetime-local"><button class="sm" id="depNow" type="button">Adesso</button></div></div>
+    <button class="primary" id="go" type="button">Controlla il viaggio</button>
+    <div id="tripOut"></div>
+  </div>
+</div>
+
+<div id="tools">
+  <button id="locate" title="Dove sono" aria-label="Dove sono"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <button id="euBtn" title="Italia / Europa" aria-label="Italia / Europa"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></button>
+  <button id="searchBtn" title="Cerca un luogo" aria-label="Cerca un luogo"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
+  <button id="tripBtn" title="Il mio viaggio" aria-label="Il mio viaggio"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17c6 0 2-10 8-10"/></svg></button>
+  <button id="legendToggle" title="Legenda" aria-label="Legenda">?</button>
+</div>
+
+<div id="status" class="card"></div>
+
+<div id="bar" class="card">
+  <button id="play" aria-label="Avvia il film"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4.5v15l13-7.5z"/></svg></button>
+  <div id="timeBox">
+    <div id="timeLabel"><b id="tTime">--:--</b><span id="tRel">caricamento…</span></div>
+    <input id="slider" type="range" min="0" max="0" value="0" step="1" aria-label="Orario">
+  </div>
+  <button id="now" disabled>Adesso</button>
+</div>
+
+<div id="credits">Radar: Dipartimento della Protezione Civile (CC BY-SA 4.0), OPERA/EUMETNET (CC BY 4.0) · Mappa: Natural Earth, GeoNames (CC BY 4.0)</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- configurazione
+const CFG = Object.assign({
+  dpc: "https://s3-prod-dpc-radar-webp-cache.s3.eu-south-1.amazonaws.com",
+  eu: "",                // indirizzo delle tessere OPERA pubblicate dal sito (vuoto = nessuna)
+  frames: 13,            // 13 foto = un'ora di film (una ogni 5 minuti)
+  probe: [68, 46],       // tessera che c'è sempre, per capire se una foto è già pubblicata
+}, window.METEOSTRADA_CONFIG || {});
+
+const DATA_Z = 7;        // le tessere del radar sono al livello 7 (circa 0,9 km a pixel)
+const STEP = 5 * 60000;
+// stessi livelli e colori dell'app
+const LEVELS = [0.3, 1, 2.5, 8, 30, 60];
+const COLORS = [
+  [0x6F, 0xD3, 0xFF, 150], [0x22, 0xA7, 0xF0, 185], [0x1F, 0x5F, 0xE0, 205],
+  [0xFF, 0xD2, 0x1F, 225], [0xFF, 0x45, 0x1A, 235], [0xD8, 0x2B, 0xF5, 240],
+];
+const NAMES = ["Pioviggine", "Pioggia leggera", "Pioggia moderata", "Pioggia forte", "Molto forte", "Nubifragio, grandine"];
+
+// legenda
+{
+  const lg = document.getElementById("legend");
+  COLORS.forEach((c, i) => {
+    const d = document.createElement("div");
+    const edge = `rgb(${c[0]*.7|0},${c[1]*.7|0},${c[2]*.7|0})`;
+    d.innerHTML = `<i style="background:rgba(${c[0]},${c[1]},${c[2]},${c[3]/255});border-color:${edge}"></i>${NAMES[i]}`;
+    lg.appendChild(d);
+  });
+}
+
+// ---------------------------------------------------------------- stato della mappa
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, dpr = 1;
+// centro in coordinate "normalizzate" (0..1 su tutto il mondo), zoom frazionario
+const view = { mx: 0.534, my: 0.3, zoom: 5.6 };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const MIN_ZOOM = 4, MAX_ZOOM = 12;
+
+function lonLatToNorm(lon, lat) {
+  const s = Math.sin(clamp(lat, -85, 85) * Math.PI / 180);
+  return [(lon + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)];
+}
+const worldSize = () => 256 * Math.pow(2, view.zoom);
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  dirty = true;
+}
+function fitItaly() {
+  const [x0, y0] = lonLatToNorm(6.2, 47.3), [x1, y1] = lonLatToNorm(19.0, 36.3);
+  view.mx = (x0 + x1) / 2; view.my = (y0 + y1) / 2;
+  const zx = Math.log2(W / (256 * (x1 - x0))), zy = Math.log2((H - 140) / (256 * (y1 - y0)));
+  view.zoom = clamp(Math.min(zx, zy) - 0.05, MIN_ZOOM, 8);
+}
+function zoomAbout(sx, sy, newZoom) {
+  newZoom = clamp(newZoom, MIN_ZOOM, MAX_ZOOM);
+  const n0 = worldSize();
+  const px = view.mx + (sx - W / 2) / n0, py = view.my + (sy - H / 2) / n0;
+  view.zoom = newZoom;
+  const n1 = worldSize();
+  view.mx = px - (sx - W / 2) / n1; view.my = py - (sy - H / 2) / n1;
+  limitView(); dirty = true;
+}
+function limitView() {
+  view.my = clamp(view.my, 0.02, 0.98);
+  view.mx = ((view.mx % 1) + 1) % 1;
+}
+function panBy(dx, dy) {
+  const n = worldSize();
+  view.mx -= dx / n; view.my -= dy / n; limitView(); dirty = true;
+}
+
+// ---------------------------------------------------------------- gesti (mouse, dito, rotella)
+const ptrs = new Map();
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+});
+canvas.addEventListener("pointermove", e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  if (ptrs.size === 1) {
+    panBy(e.clientX - p.x, e.clientY - p.y);
+    p.x = e.clientX; p.y = e.clientY;
+  } else if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()];
+    const oldD = Math.hypot(a.x - b.x, a.y - b.y), oldM = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+    p.x = e.clientX; p.y = e.clientY;
+    const newD = Math.hypot(a.x - b.x, a.y - b.y), newM = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+    if (oldD > 4 && newD > 4) zoomAbout(oldM[0], oldM[1], view.zoom + Math.log2(newD / oldD));
+    panBy(newM[0] - oldM[0], newM[1] - oldM[1]);
+  }
+});
+const endPtr = e => { ptrs.delete(e.pointerId); };
+canvas.addEventListener("pointerup", endPtr);
+canvas.addEventListener("pointercancel", endPtr);
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  zoomAbout(e.clientX, e.clientY, view.zoom - e.deltaY * (e.deltaMode ? 0.05 : 0.002));
+}, { passive: false });
+canvas.addEventListener("dblclick", e => zoomAbout(e.clientX, e.clientY, view.zoom + 1));
+window.addEventListener("keydown", e => {
+  if (e.key === "+" || e.key === "=") zoomAbout(W / 2, H / 2, view.zoom + 0.5);
+  if (e.key === "-") zoomAbout(W / 2, H / 2, view.zoom - 0.5);
+});
+
+// ---------------------------------------------------------------- mappa di base (la stessa dell'app)
+// Natural Earth (pubblico dominio) e GeoNames (CC BY 4.0): terre, coste, laghi, fiumi, confini,
+// strade e nomi, già in "pixel globali" del livello 7 come i dati del radar. Si disegna a tessere.
+const MAP_B64 = "/*MAPDATA*/";
+const N7 = 256 * 128;
+let MAP = null;
+const L_LAND = 1, L_COAST = 2, L_LAKES = 3, L_RIVERS = 4, L_BORDERS = 5, L_REGIONS = 6, L_URBAN = 7, L_ROADS = 8, L_PLACES = 9;
+const MC = { ocean: "#0E1A2B", land: "#2B3F57", urban: "#34495F", coast: "#4A6584", river: "#2E5B86",
+  region: "#3B5470", border: "#6F87A3", major: "#C9A44A", minor: "#7A6A4A" };
+
+async function loadMap() {
+  const bin = Uint8Array.from(atob(MAP_B64), c => c.charCodeAt(0));
+  const buf = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  const data = new Uint8Array(buf);
+  if (String.fromCharCode(data[0], data[1], data[2], data[3]) !== "MSM1") throw new Error("mappa non riconosciuta");
+  let pos = 4;
+  const varint = () => { let r = 0, m = 1; for (;;) { const b = data[pos++]; r += (b & 0x7f) * m; if (!(b & 0x80)) return r; m *= 128; } };
+  const signed = () => { const n = varint(); return n % 2 === 0 ? n / 2 : -(n + 1) / 2; };
+  const dec = new TextDecoder();
+  const layers = {};
+  const layerCount = data[pos++];
+  for (let l = 0; l < layerCount; l++) {
+    const layer = data[pos++], geometry = data[pos++], count = varint(), feats = [];
+    for (let f = 0; f < count; f++) {
+      const kind = data[pos++]; let name = null;
+      if (geometry === 1) { const len = data[pos++]; name = dec.decode(data.subarray(pos, pos + len)); pos += len; }
+      const partCount = varint(), parts = [];
+      let lon = 0, lat = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let p = 0; p < partCount; p++) {
+        const n = varint(), c = new Float32Array(n * 2);
+        for (let i = 0; i < n; i++) {
+          lon += signed(); lat += signed();
+          const la = Math.max(-85, Math.min(85, lat / 1e5)) * Math.PI / 180;
+          const x = (lon / 1e5 + 180) / 360 * N7;
+          const y = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * N7;
+          c[i * 2] = x; c[i * 2 + 1] = y;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        parts.push(c);
+      }
+      feats.push({ kind, name, parts, x0, y0, x1, y1 });
+    }
+    layers[layer] = feats;
+  }
+  const roads = layers[L_ROADS] || [];
+  layers.major = roads.filter(r => r.kind === 1);
+  layers.minor = roads.filter(r => r.kind !== 1);
+  MAP = layers;
+  buildPlaces();
+  dirty = true;
+}
+
+function tracePath(c, feats, closed, bx0, by0, bx1, by1, minSize, step2) {
+  c.beginPath();
+  for (const f of feats) {
+    if (f.x1 < bx0 || f.x0 > bx1 || f.y1 < by0 || f.y0 > by1) continue;
+    if (minSize > 0 && f.x1 - f.x0 < minSize && f.y1 - f.y0 < minSize) continue;
+    for (const part of f.parts) {
+      if (part.length < 4) continue;
+      let lx = part[0], ly = part[1];
+      c.moveTo(lx, ly);
+      const last = part.length - 2;
+      for (let i = 2; i < part.length; i += 2) {
+        const x = part[i], y = part[i + 1], dx = x - lx, dy = y - ly;
+        if (i !== last && dx * dx + dy * dy < step2) continue;
+        c.lineTo(x, y); lx = x; ly = y;
+      }
+      if (closed) c.closePath();
+    }
+  }
+}
+
+const baseCache = new Map();
+function baseTile(z, tx, ty) {
+  const T = dpr >= 1.5 ? 512 : 256, key = z + "|" + tx + "|" + ty + "|" + T;
+  let cv = baseCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement("canvas"); cv.width = cv.height = T;
+  const c = cv.getContext("2d");
+  c.fillStyle = MC.ocean; c.fillRect(0, 0, T, T);
+  if (MAP) {
+    const f = Math.pow(2, z - DATA_Z), s = f * T / 256, px = 1 / s;   // px = un pixel dello schermo, in pixel globali
+    c.setTransform(s, 0, 0, s, -tx * T, -ty * T);
+    const m = 3 * px, bx0 = tx * 256 / f - m, by0 = ty * 256 / f - m, bx1 = (tx + 1) * 256 / f + m, by1 = (ty + 1) * 256 / f + m;
+    const step2 = (px * 0.8) * (px * 0.8), K = T / 256;
+    c.lineJoin = c.lineCap = "round";
+    const km = 115800 / Math.pow(2, z);   // larghezza indicativa dello schermo
+    tracePath(c, MAP[L_LAND] || [], true, bx0, by0, bx1, by1, px, step2);
+    c.fillStyle = MC.land; c.fill("evenodd"); c.strokeStyle = MC.land; c.lineWidth = 0.8 * K * px; c.stroke();
+    if (km <= 100) { tracePath(c, MAP[L_URBAN] || [], true, bx0, by0, bx1, by1, px * 2, step2); c.fillStyle = MC.urban; c.fill("evenodd"); }
+    tracePath(c, MAP[L_LAKES] || [], true, bx0, by0, bx1, by1, px * 3, step2); c.fillStyle = MC.ocean; c.fill("evenodd");
+    if (km <= 600) {
+      const maxRank = km <= 100 ? 15 : km <= 300 ? 6 : 4;
+      tracePath(c, (MAP[L_RIVERS] || []).filter(r => r.kind <= maxRank), false, bx0, by0, bx1, by1, px * 4, step2);
+      c.strokeStyle = MC.river; c.lineWidth = K * px; c.stroke();
+    }
+    if (km <= 100) {
+      tracePath(c, MAP[L_REGIONS] || [], false, bx0, by0, bx1, by1, 0, step2);
+      c.setLineDash([4 * K * px, 3 * K * px]); c.strokeStyle = MC.region; c.lineWidth = 0.8 * K * px; c.stroke(); c.setLineDash([]);
+    }
+    tracePath(c, MAP[L_BORDERS] || [], false, bx0, by0, bx1, by1, 0, step2);
+    c.strokeStyle = MC.border; c.lineWidth = 1.2 * K * px; c.stroke();
+    if (km <= 100) { tracePath(c, MAP.minor, false, bx0, by0, bx1, by1, px * 3, step2); c.strokeStyle = MC.minor; c.lineWidth = K * px; c.stroke(); }
+    if (km <= 300) { tracePath(c, MAP.major, false, bx0, by0, bx1, by1, 0, step2); c.strokeStyle = MC.major; c.lineWidth = 1.6 * K * px; c.stroke(); }
+    tracePath(c, MAP[L_COAST] || [], false, bx0, by0, bx1, by1, px, step2);
+    c.strokeStyle = MC.coast; c.lineWidth = K * px; c.stroke();
+  }
+  if (MAP) {
+    baseCache.set(key, cv);
+    if (baseCache.size > 90) baseCache.delete(baseCache.keys().next().value);
+  }
+  return cv;
+}
+
+// nomi delle località: più ci si allontana, solo le più importanti; un nome che ne coprirebbe un altro si salta
+function drawPlaces() {
+  if (!MAP || !MAP[L_PLACES]) return;
+  const n = worldSize(), lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * view.my))) * 180 / Math.PI;
+  const km = W * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, view.zoom) / 1000;
+  const maxKind = km <= 15 ? 6 : km <= 35 ? 5 : km <= 70 ? 4 : km <= 150 ? 3 : km <= 400 ? 2 : 1;
+  const taken = []; let count = 0;
+  ctx.textBaseline = "middle";
+  for (const p of MAP[L_PLACES]) {
+    if (p.kind > maxKind || !p.name) continue;
+    let sx = W / 2 + (p.parts[0][0] / N7 - view.mx) * n;
+    const sy = H / 2 + (p.parts[0][1] / N7 - view.my) * n;
+    if (sx < 0 || sy < 0 || sx > W || sy > H) continue;
+    const size = p.kind <= 1 ? 13 : p.kind <= 3 ? 12 : 11;
+    ctx.font = `600 ${size}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
+    const w = ctx.measureText(p.name).width, h = size + 2;
+    let x = sx + 6; if (x + w > W) x = sx - 6 - w;
+    const box = [x - 2, sy - h / 2 - 2, x + w + 2, sy + h / 2 + 2];
+    if (taken.some(t => box[0] < t[2] && box[2] > t[0] && box[1] < t[3] && box[3] > t[1])) continue;
+    taken.push(box);
+    ctx.beginPath(); ctx.arc(sx, sy, 2.2, 0, 7); ctx.fillStyle = "#D7E3F0"; ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.78)"; ctx.fillText(p.name, x + 1, sy + 1);
+    ctx.fillStyle = "#B9C9DB"; ctx.fillText(p.name, x, sy);
+    if (++count > 30) break;
+  }
+}
+
+// ---------------------------------------------------------------- radar: tessere dati (mm/h)
+const pad2 = n => String(n).padStart(2, "0");
+function tileUrl(t, x, y) {
+  const d = new Date(t);
+  return `${CFG.dpc}/SRI/${d.getUTCFullYear()}/${pad2(d.getUTCMonth() + 1)}/${pad2(d.getUTCDate())}/` +
+    `${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}/${DATA_Z}/${x}/${y}/sri.webp`;
+}
+let scratch = null;
+function pixelsOf(bmp) {
+  if (!scratch) { scratch = document.createElement("canvas"); scratch.width = scratch.height = 256; }
+  const c = scratch.getContext("2d", { willReadFrequently: true });
+  c.clearRect(0, 0, 256, 256); c.drawImage(bmp, 0, 0);
+  return c.getImageData(0, 0, 256, 256).data;
+}
+const BMP_OPTS = { colorSpaceConversion: "none", premultiplyAlpha: "none" };
+
+// Italia: radar della Protezione Civile. -1 = nessun dato.
+const dpcCache = new Map();
+function dpcTile(t, x, y) {
+  const key = t + "/" + x + "/" + y;
+  let p = dpcCache.get(key);
+  if (p) return p;
+  p = (async () => {
+    const r = await fetch(tileUrl(t, x, y));
+    if (r.status === 403 || r.status === 404) return null;   // fuori copertura o non ancora pubblicata
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS));
+    const out = new Float32Array(65536);
+    // il radar mette 0..100 mm/h nel canale rosso; trasparente = nessun dato
+    for (let i = 0; i < 65536; i++) out[i] = px[i * 4 + 3] < 128 ? -1 : px[i * 4] * (100 / 255);
+    return out;
+  })();
+  p.catch(() => dpcCache.delete(key));
+  dpcCache.set(key, p);
+  if (dpcCache.size > 600) dpcCache.delete(dpcCache.keys().next().value);
+  return p;
+}
+
+// Resto d'Europa: radar europeo OPERA, già convertito in tessere dal lavoro automatico del sito.
+// Codifica: mm/h = (rosso/255)^2 * 100; trasparente = fuori dalla copertura dei radar.
+let euFrames = [];            // orari (ms) delle foto pubblicate
+let euTiles = null;           // elenco "x/y" delle tessere che esistono (se noto)
+let euReady = Promise.resolve();
+const euCache = new Map();
+const EU_SNAP = /*EUSNAP*/null;
+const pad = n => String(n).padStart(2, "0");
+const stamp = t => { const d = new Date(t); return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`; };
+function euDecode(bmp) {
+  const px = pixelsOf(bmp), out = new Float32Array(65536);
+  for (let i = 0; i < 65536; i++) { const r = px[i * 4] / 255; out[i] = px[i * 4 + 3] < 128 ? -1 : r * r * 100; }
+  return out;
+}
+async function loadEuManifest() {
+  if (!CFG.eu) return;
+  try {
+    const r = await fetch(CFG.eu + "/latest.json", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    euFrames = (j.frames || []).map(f => Date.parse(f));
+    euTiles = j.tiles ? new Set(j.tiles) : null;
+    euCache.clear(); dirty = true;
+  } catch { /* senza Europa resta l'Italia */ }
+}
+function euTile(t, x, y) {
+  if (EU_SNAP && !CFG.eu) {
+    const b64 = EU_SNAP.tiles[x + "/" + y];
+    if (!b64) return Promise.resolve(null);
+    const key = "s/" + x + "/" + y;
+    if (!euCache.has(key)) euCache.set(key, createImageBitmap(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: "image/png" }), BMP_OPTS).then(euDecode));
+    return euCache.get(key);
+  }
+  if (!euFrames.length) return Promise.resolve(null);
+  let best = null;
+  for (const f of euFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
+  if (best === null || (euTiles && !euTiles.has(x + "/" + y))) return Promise.resolve(null);
+  const key = best + "/" + x + "/" + y;
+  let p = euCache.get(key);
+  if (p) return p;
+  p = (async () => {
+    const r = await fetch(`${CFG.eu}/${stamp(best)}/${DATA_Z}/${x}/${y}.png`);
+    if (!r.ok) return null;
+    return euDecode(await createImageBitmap(await r.blob(), BMP_OPTS));
+  })();
+  p.catch(() => euCache.delete(key));
+  euCache.set(key, p);
+  if (euCache.size > 600) euCache.delete(euCache.keys().next().value);
+  return p;
+}
+
+// Una tessera dati: l'Italia dal radar nazionale, dove non vede si completa con quello europeo.
+const dataCache = new Map(); // "tempo/x/y" -> Promise<Float32Array|null>
+function dataTile(t, x, y) {
+  const key = t + "/" + x + "/" + y;
+  let p = dataCache.get(key);
+  if (p) return p;
+  p = Promise.all([dpcTile(t, x, y), euReady.then(() => euTile(t, x, y)).catch(() => null)]).then(([d, e]) => {
+    if (!d && !e) return null;
+    const out = new Float32Array(65536);
+    for (let i = 0; i < 65536; i++) {
+      let v = d ? d[i] : -1;
+      if (v < 0) v = e ? e[i] : -1;
+      out[i] = v < 0 ? 0 : v;
+    }
+    return out;
+  });
+  p.catch(() => dataCache.delete(key));
+  dataCache.set(key, p);
+  if (dataCache.size > 600) dataCache.delete(dataCache.keys().next().value);
+  return p;
+}
+
+// ---------------------------------------------------------------- radar: disegno di una tessera
+// Si legge la griglia dei dati, la si rende morbida (interpolazione) e per ogni livello si
+// disegna una fascia piena con un bordo più scuro: le stesse macchie nette dell'app.
+const rainCache = new Map(); // "tempo|z|x|y" -> canvas
+const rainBusy = new Map();
+const lastDrawn = new Map(); // "z|x|y" -> ultimo canvas mostrato (per non sfarfallare nel film)
+
+async function renderRain(t, z, tx, ty) {
+  const f = Math.pow(2, z - DATA_Z);
+  const gx0 = Math.floor(tx * 256 / f) - 1, gy0 = Math.floor(ty * 256 / f) - 1;
+  const gx1 = Math.ceil((tx + 1) * 256 / f) + 1, gy1 = Math.ceil((ty + 1) * 256 / f) + 1;
+  const rw = gx1 - gx0 + 1, rh = gy1 - gy0 + 1;
+  const region = new Float32Array(rw * rh);
+  const jobs = [];
+  for (let sy = Math.floor(gy0 / 256); sy <= Math.floor(gy1 / 256); sy++) {
+    for (let sx = Math.floor(gx0 / 256); sx <= Math.floor(gx1 / 256); sx++) {
+      if (sx < 0 || sy < 0 || sx >= 128 || sy >= 128) continue;
+      jobs.push(dataTile(t, sx, sy).then(arr => ({ sx, sy, arr })));
+    }
+  }
+  for (const { sx, sy, arr } of await Promise.all(jobs)) {
+    if (!arr) continue;
+    for (let y = 0; y < 256; y++) {
+      const ry = sy * 256 + y - gy0; if (ry < 0 || ry >= rh) continue;
+      for (let x = 0; x < 256; x++) {
+        const rx = sx * 256 + x - gx0; if (rx < 0 || rx >= rw) continue;
+        region[ry * rw + rx] = arr[y * 256 + x];
+      }
+    }
+  }
+  // I dati arrivano a scalini (un byte per pixel): sui bordi della pioggia si ammorbidiscono
+  // con una media leggera, ma lasciando intatti i nuclei forti (si tiene il valore più alto).
+  {
+    const tmp = new Float32Array(rw * rh);
+    for (let y = 0; y < rh; y++) for (let x = 1; x < rw - 1; x++) {
+      const i = y * rw + x; tmp[i] = (region[i - 1] + 2 * region[i] + region[i + 1]) / 4;
+    }
+    for (let y = 1; y < rh - 1; y++) for (let x = 1; x < rw - 1; x++) {
+      const i = y * rw + x, s = (tmp[i - rw] + 2 * tmp[i] + tmp[i + rw]) / 4;
+      if (s > region[i]) region[i] = s;
+    }
+  }
+  // livello di ogni pixel della tessera
+  const lv = new Int8Array(256 * 256);
+  let any = false;
+  for (let y = 0; y < 256; y++) {
+    const fy = (ty * 256 + y + 0.5) / f - 0.5 - gy0, iy = Math.floor(fy), wy = fy - iy;
+    for (let x = 0; x < 256; x++) {
+      const fx = (tx * 256 + x + 0.5) / f - 0.5 - gx0, ix = Math.floor(fx), wx = fx - ix;
+      const i = iy * rw + ix;
+      const v = (region[i] * (1 - wx) + region[i + 1] * wx) * (1 - wy) +
+                (region[i + rw] * (1 - wx) + region[i + rw + 1] * wx) * wy;
+      let l = -1;
+      if (v >= LEVELS[0]) { l = 0; while (l < 5 && v >= LEVELS[l + 1]) l++; any = true; }
+      lv[y * 256 + x] = l;
+    }
+  }
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 256;
+  if (!any) return cv;
+  const c = cv.getContext("2d");
+  const img = c.createImageData(256, 256), d = img.data;
+  for (let y = 0; y < 256; y++) {
+    for (let x = 0; x < 256; x++) {
+      const i = y * 256 + x, l = lv[i];
+      if (l < 0) continue;
+      const col = COLORS[l];
+      // bordo: dove il vicino (a destra o sotto) è a un livello più basso
+      const r = x < 255 ? lv[i + 1] : l, b = y < 255 ? lv[i + 256] : l;
+      const l0 = x > 0 ? lv[i - 1] : l, u = y > 0 ? lv[i - 256] : l;
+      const edge = r < l || b < l || l0 < l || u < l;
+      const o = i * 4;
+      if (edge) { d[o] = col[0] * .7; d[o + 1] = col[1] * .7; d[o + 2] = col[2] * .7; d[o + 3] = 255; }
+      else { d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = col[3]; }
+    }
+  }
+  c.putImageData(img, 0, 0);
+  return cv;
+}
+
+function rainTile(t, z, x, y) {
+  const key = t + "|" + z + "|" + x + "|" + y, lk = z + "|" + x + "|" + y;
+  const ready = rainCache.get(key);
+  if (ready) { lastDrawn.set(lk, ready); return ready; }
+  if (!rainBusy.has(key)) {
+    rainBusy.set(key, true);
+    renderRain(t, z, x, y).then(cv => {
+      rainCache.set(key, cv);
+      if (rainCache.size > 400) rainCache.delete(rainCache.keys().next().value);
+      dirty = true;
+    }).catch(() => { setStatus("Radar non raggiungibile, riprovo…"); })
+      .finally(() => rainBusy.delete(key));
+  }
+  return lastDrawn.get(lk) || null;
+}
+
+// ---------------------------------------------------------------- disegno
+let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
+
+function setStatus(msg) {
+  const s = document.getElementById("status");
+  s.textContent = msg || ""; s.style.display = msg ? "block" : "none";
+}
+
+function visibleTiles(z, margin = 0) {
+  const n = worldSize(), tiles = 1 << z, size = 256 * Math.pow(2, view.zoom - z);
+  const x0 = Math.floor((view.mx - W / 2 / n) * tiles) - margin, x1 = Math.floor((view.mx + W / 2 / n) * tiles) + margin;
+  const y0 = Math.max(0, Math.floor((view.my - H / 2 / n) * tiles) - margin);
+  const y1 = Math.min(tiles - 1, Math.floor((view.my + H / 2 / n) * tiles) + margin);
+  return { x0, x1, y0, y1, tiles, size, n };
+}
+function screenOf(tx, ty, v) {
+  return [Math.round(W / 2 + (tx / v.tiles - view.mx) * v.n), Math.round(H / 2 + (ty / v.tiles - view.my) * v.n)];
+}
+function drawLayer(fn, z) {
+  const v = visibleTiles(z);
+  for (let ty = v.y0; ty <= v.y1; ty++) {
+    for (let tx = v.x0; tx <= v.x1; tx++) {
+      const wx = ((tx % v.tiles) + v.tiles) % v.tiles;
+      const [sx, sy] = screenOf(tx, ty, v), [ex, ey] = screenOf(tx + 1, ty + 1, v);
+      fn(wx, ty, sx, sy, ex - sx, ey - sy);
+    }
+  }
+}
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#0E1A2B"; ctx.fillRect(0, 0, W, H);
+  const bz = clamp(Math.round(view.zoom), 2, 14);
+  const rz = clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 5, 11);
+
+  drawLayer((x, y, sx, sy, w, h) => { ctx.drawImage(baseTile(bz, x, y), sx, sy, w, h); }, bz);
+
+  if (frames.length) {
+    const t = frames[cur];
+    drawLayer((x, y, sx, sy, w, h) => {
+      const cv = rainTile(t, rz, x, y);
+      if (cv) ctx.drawImage(cv, sx, sy, w, h);
+    }, rz);
+  }
+
+  drawPlaces();
+  drawRoute();
+
+  if (here) {
+    const n = worldSize(), [mx, my] = lonLatToNorm(here.lon, here.lat);
+    const sx = W / 2 + (mx - view.mx) * n, sy = H / 2 + (my - view.my) * n;
+    ctx.beginPath(); ctx.arc(sx, sy, 9, 0, 7); ctx.fillStyle = "#4FA3E355"; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 7); ctx.fillStyle = "#4FA3E3"; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
+  }
+}
+(function loop() {
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(loop);
+})();
+
+// ---------------------------------------------------------------- foto del radar e film
+const slider = document.getElementById("slider");
+const tTime = document.getElementById("tTime"), tRel = document.getElementById("tRel");
+const nowBtn = document.getElementById("now"), playBtn = document.getElementById("play");
+let playing = false, timer = null;
+
+async function published(t) {
+  try { return (await dpcTile(t, CFG.probe[0], CFG.probe[1])) !== null; } catch { return false; }
+}
+async function findFrames() {
+  const floor = Math.floor(Date.now() / STEP) * STEP;
+  let latest = null;
+  for (let i = 0; i < 8; i++) {
+    const t = floor - i * STEP;
+    if (await published(t)) { latest = t; break; }
+  }
+  if (latest === null) return null;
+  const list = [];
+  for (let i = CFG.frames - 1; i >= 0; i--) list.push(latest - i * STEP);
+  return list;
+}
+function showFrame(i) {
+  cur = clamp(i, 0, frames.length - 1);
+  slider.value = cur;
+  const t = frames[cur], d = new Date(t);
+  tTime.textContent = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const ago = Math.round((Date.now() - t) / 60000);
+  tRel.textContent = cur === frames.length - 1 ? (ago < 3 ? "adesso" : ago + " min fa") : ago + " min fa";
+  nowBtn.disabled = cur === frames.length - 1;
+  dirty = true;
+}
+async function prefetch() {
+  // scarica in anticipo le tessere di tutte le foto per la zona visibile
+  const v = visibleTiles(DATA_Z, 0);
+  const jobs = [];
+  for (const t of frames)
+    for (let y = clamp(v.y0, 0, 127); y <= clamp(v.y1, 0, 127); y++)
+      for (let x = clamp(v.x0, 0, 127); x <= clamp(v.x1, 0, 127); x++)
+        jobs.push(dataTile(t, x, y).catch(() => null));
+  await Promise.all(jobs);
+}
+function play(on) {
+  playing = on;
+  document.getElementById("playIcon").setAttribute("d", on ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4.5v15l13-7.5z");
+  clearInterval(timer);
+  if (!on) return;
+  setStatus("Carico il film…");
+  prefetch().then(() => {
+    setStatus("");
+    if (!playing) return;
+    if (cur >= frames.length - 1) showFrame(0);
+    timer = setInterval(() => {
+      if (cur >= frames.length - 1) { showFrame(0); return; }
+      showFrame(cur + 1);
+    }, 550);
+  });
+}
+playBtn.onclick = () => play(!playing);
+slider.oninput = () => { play(false); showFrame(+slider.value); };
+nowBtn.onclick = () => { play(false); showFrame(frames.length - 1); };
+
+async function refresh(first) {
+  try {
+    const list = await findFrames();
+    if (!list) { setStatus("Radar fermo o non raggiungibile"); tRel.textContent = "nessuna foto recente"; return; }
+    const wasLast = !frames.length || cur === frames.length - 1;
+    frames = list;
+    slider.max = frames.length - 1;
+    showFrame(wasLast ? frames.length - 1 : Math.max(0, cur - 1));
+    setStatus("");
+  } catch (e) { if (first) setStatus("Radar non raggiungibile"); }
+}
+
+// ---------------------------------------------------------------- dove sono
+document.getElementById("locate").onclick = () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(p => {
+    here = { lat: p.coords.latitude, lon: p.coords.longitude };
+    const [mx, my] = lonLatToNorm(here.lon, here.lat);
+    view.mx = mx; view.my = my; view.zoom = Math.max(view.zoom, 8.5); limitView(); dirty = true;
+  }, () => setStatus("Posizione non disponibile"), { timeout: 8000 });
+};
+
+// ---------------------------------------------------------------- luoghi (dalla mappa dell'app, senza servizi esterni)
+const norm = t => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+let PLACES = [];
+const toLatLon = (gx, gy) => ({
+  lon: gx / N7 * 360 - 180,
+  lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * gy / N7))) * 180 / Math.PI });
+const toGlobal = (lat, lon) => {
+  const la = Math.max(-85, Math.min(85, lat)) * Math.PI / 180;
+  return [(lon + 180) / 360 * N7, (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * N7];
+};
+function buildPlaces() {
+  PLACES = (MAP[L_PLACES] || []).filter(p => p.name && p.parts.length).map(p => {
+    const [gx, gy] = [p.parts[0][0], p.parts[0][1]];
+    return Object.assign({ name: p.name, key: norm(p.name), kind: p.kind, gx, gy }, toLatLon(gx, gy));
+  });
+}
+function distKm(a, b) {
+  const R = 6371, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function nearestPlace(pt, maxKm, maxKind, notSame) {
+  let best = null, bd = maxKm;
+  for (const p of PLACES) {
+    if (p.kind > maxKind || p === notSame) continue;
+    if (Math.abs(p.lat - pt.lat) > 1.5) continue;
+    const d = distKm(pt, p); if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+function findPlaces(q, limit = 7) {
+  q = norm(q); if (q.length < 2) return [];
+  const starts = [], has = [];
+  for (const p of PLACES) {
+    if (p.key.startsWith(q)) starts.push(p);
+    else if (p.key.split(/[\s'\-]+/).some(w => w.startsWith(q))) has.push(p);
+  }
+  const by = (a, b) => a.kind - b.kind || a.key.length - b.key.length;
+  return starts.sort(by).concat(has.sort(by)).slice(0, limit);
+}
+function attachAutocomplete(input, onPick) {
+  const ul = document.createElement("ul"); ul.className = "ac";
+  input.closest(".field").appendChild(ul);
+  let items = [];
+  const choose = p => { input.value = p.name; input._pick = p; ul.innerHTML = ""; items = []; if (onPick) onPick(p); };
+  input.addEventListener("input", () => {
+    input._pick = null; items = findPlaces(input.value); ul.innerHTML = "";
+    for (const p of items) {
+      const li = document.createElement("li"), near = p.kind > 2 ? nearestPlace(p, 120, 2, p) : null;
+      li.innerHTML = `<span></span><small></small>`;
+      li.firstChild.textContent = p.name; li.lastChild.textContent = near ? "presso " + near.name : "";
+      li.addEventListener("pointerdown", e => { e.preventDefault(); choose(p); });
+      ul.appendChild(li);
+    }
+  });
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && items[0]) { e.preventDefault(); choose(items[0]); } });
+  input.addEventListener("blur", () => setTimeout(() => { ul.innerHTML = ""; }, 150));
+}
+
+// ---------------------------------------------------------------- previsioni (Open-Meteo) e radar nei punti
+const levelOf = v => { if (!(v >= LEVELS[0])) return -1; let l = 0; while (l < 5 && v >= LEVELS[l + 1]) l++; return l; };
+const fmtTime = t => new Date(t).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const mmTxt = v => (v < 10 ? v.toFixed(1) : Math.round(v)).toString().replace(".", ",") + " mm/h";
+
+async function forecastAt(points) {
+  const q = "latitude=" + points.map(p => p.lat.toFixed(3)).join(",") + "&longitude=" + points.map(p => p.lon.toFixed(3)).join(",") +
+    "&minutely_15=precipitation&hourly=precipitation,weather_code&timeformat=unixtime&timezone=UTC&forecast_days=3";
+  const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
+  if (!r.ok) throw new Error("previsioni " + r.status);
+  const j = await r.json();
+  return Array.isArray(j) ? j : [j];
+}
+// mm/h e temporale previsti in quel punto a quell'ora
+function modelAt(res, t) {
+  const sec = Math.floor(t / 1000);
+  let mm = null, thunder = false;
+  const m = res.minutely_15;
+  if (m && m.time && m.precipitation) {
+    const i = Math.floor((sec - m.time[0]) / 900);
+    if (i >= 0 && i < m.precipitation.length && m.precipitation[i] != null) mm = m.precipitation[i] * 4;
+  }
+  const h = res.hourly;
+  if (h && h.time) {
+    const i = Math.floor((sec - h.time[0]) / 3600);
+    if (i >= 0 && i < h.time.length) {
+      if (mm === null && h.precipitation && h.precipitation[i] != null) mm = h.precipitation[i];
+      if (h.weather_code && h.weather_code[i] >= 95) thunder = true;
+    }
+  }
+  return { mm: mm === null ? 0 : mm, thunder };
+}
+// pioggia vista dal radar in quel punto (massimo attorno, circa 2,5 km); null se fuori copertura
+async function radarAt(lat, lon) {
+  if (!frames.length) return null;
+  const [gx, gy] = toGlobal(lat, lon), tx = Math.floor(gx / 256), ty = Math.floor(gy / 256);
+  let arr; try { arr = await dataTile(frames[frames.length - 1], tx, ty); } catch { return null; }
+  if (!arr) return null;
+  let best = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const x = Math.floor(gx) - tx * 256 + dx, y = Math.floor(gy) - ty * 256 + dy;
+    if (x >= 0 && y >= 0 && x < 256 && y < 256) best = Math.max(best, arr[y * 256 + x]);
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------- vista laterale
+const views = { legend: document.getElementById("legend"), search: document.getElementById("searchView"), trip: document.getElementById("tripView") };
+function setView(name) {
+  for (const k in views) views[k].hidden = k !== name;
+  if (name === "search") setTimeout(() => document.getElementById("q").focus(), 30);
+}
+const toggleView = name => setView(views[name].hidden ? name : null);
+document.getElementById("legendToggle").onclick = () => toggleView("legend");
+document.getElementById("searchBtn").onclick = () => toggleView("search");
+document.getElementById("tripBtn").onclick = () => toggleView("trip");
+if (window.innerWidth <= 640) setView(null);
+
+let wide = false;
+document.getElementById("euBtn").onclick = () => {
+  wide = !wide;
+  if (wide) {
+    const [x0, y0] = lonLatToNorm(-11, 60), [x1, y1] = lonLatToNorm(32, 35);
+    view.mx = (x0 + x1) / 2; view.my = (y0 + y1) / 2;
+    view.zoom = clamp(Math.min(Math.log2(W / (256 * (x1 - x0))), Math.log2((H - 140) / (256 * (y1 - y0)))), MIN_ZOOM, 8);
+    limitView(); dirty = true;
+  } else { fitItaly(); dirty = true; }
+};
+
+// ---------------------------------------------------------------- cerca un luogo
+function flyTo(lat, lon, zoom) {
+  const [mx, my] = lonLatToNorm(lon, lat);
+  view.mx = mx; view.my = my; view.zoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM); limitView(); dirty = true;
+}
+const q = document.getElementById("q"), placeInfo = document.getElementById("placeInfo");
+attachAutocomplete(q, async p => {
+  marker = { lat: p.lat, lon: p.lon, name: p.name };
+  flyTo(p.lat, p.lon, Math.max(view.zoom, 9));
+  placeInfo.innerHTML = ""; const b = document.createElement("b"); b.textContent = p.name; placeInfo.appendChild(b);
+  const line = document.createElement("div"); line.className = "muted"; line.textContent = "Controllo la pioggia…"; placeInfo.appendChild(line);
+  try {
+    const [now, fc] = await Promise.all([radarAt(p.lat, p.lon), forecastAt([p]).catch(() => null)]);
+    const out = [];
+    if (now !== null) {
+      const l = levelOf(now);
+      out.push(l < 0 ? "Adesso: asciutto (radar)." : "Adesso: " + NAMES[l].toLowerCase() + ", " + mmTxt(now) + " (radar).");
+    }
+    if (fc) {
+      const t0 = Math.floor(Date.now() / 900000) * 900000;
+      let first = null, max = 0, thunder = false;
+      for (let i = 0; i < 12; i++) {
+        const v = modelAt(fc[0], t0 + i * 900000);
+        if (v.mm >= LEVELS[0] && first === null) first = t0 + i * 900000;
+        if (v.mm > max) max = v.mm;
+        if (v.thunder) thunder = true;
+      }
+      out.push(first === null ? "Prossime 3 ore: nessuna pioggia prevista."
+        : "Prossime 3 ore: pioggia dalle " + fmtTime(first) + ", fino a " + mmTxt(max) + (thunder ? ", possibili temporali" : "") + ".");
+    } else out.push("Previsioni non raggiungibili.");
+    line.textContent = out.join(" ");
+  } catch { line.textContent = "Non riesco a controllare la pioggia ora."; }
+});
+
+// ---------------------------------------------------------------- il mio viaggio
+const fromI = document.getElementById("from"), toI = document.getElementById("to"), depI = document.getElementById("dep");
+attachAutocomplete(fromI); attachAutocomplete(toI);
+function setDepNow() {
+  const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  depI.value = d.toISOString().slice(0, 16);
+}
+setDepNow();
+document.getElementById("depNow").onclick = setDepNow;
+document.getElementById("useHere").onclick = () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(p => {
+    here = { lat: p.coords.latitude, lon: p.coords.longitude };
+    fromI.value = "La mia posizione"; fromI._pick = { name: "La mia posizione", lat: here.lat, lon: here.lon }; dirty = true;
+  }, () => setStatus("Posizione non disponibile"), { timeout: 8000 });
+};
+
+async function getRoute(a, b) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("routing " + r.status);
+    const j = await r.json();
+    const rt = j.routes && j.routes[0];
+    if (!rt) throw new Error("nessun percorso");
+    return { coords: rt.geometry.coordinates, dur: rt.duration, approx: false };
+  } catch (e) {
+    // senza servizio di percorsi: linea retta a 70 km/h (si dice chiaramente)
+    const n = 60, coords = [];
+    for (let i = 0; i <= n; i++) coords.push([a.lon + (b.lon - a.lon) * i / n, a.lat + (b.lat - a.lat) * i / n]);
+    return { coords, dur: distKm(a, b) * 1.25 / 70 * 3600, approx: true };
+  }
+}
+
+async function computeTrip(a, b, dep) {
+  const route = await getRoute(a, b);
+  const verts = []; let km = 0;
+  route.coords.forEach((c, i) => {
+    if (i) km += distKm({ lat: route.coords[i - 1][1], lon: route.coords[i - 1][0] }, { lat: c[1], lon: c[0] });
+    const [gx, gy] = toGlobal(c[1], c[0]);
+    verts.push({ gx, gy, lat: c[1], lon: c[0], km });
+  });
+  const total = km || 1, step = clamp(total / 30, 8, 25);
+  const samples = [];
+  let next = 0;
+  verts.forEach((v, i) => { if (v.km >= next || i === verts.length - 1) { samples.push({ vi: i, lat: v.lat, lon: v.lon, km: v.km }); next = v.km + step; } });
+  if (samples.length > 40) samples.length = 40;
+  samples[samples.length - 1] = { vi: verts.length - 1, lat: verts.at(-1).lat, lon: verts.at(-1).lon, km: total };
+  for (const s of samples) s.eta = dep + route.dur * 1000 * (s.km / total);
+  const fcs = await forecastAt(samples);
+  const nowT = Date.now();
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i], m = modelAt(fcs[i] || {}, s.eta);
+    s.model = m.mm; s.thunder = m.thunder; s.radar = null;
+    // nei primi 45 minuti conta anche quello che il radar vede adesso
+    if (s.eta - nowT <= 45 * 60000 && s.eta > nowT - 30 * 60000) s.radar = await radarAt(s.lat, s.lon);
+    s.mmh = Math.max(s.model, s.radar || 0);
+    s.lvl = levelOf(s.mmh);
+  }
+  return { route, verts, samples, dep, total, arr: dep + route.dur * 1000, from: a, to: b };
+}
+
+function groupHazards(t) {
+  const groups = []; let cur = null;
+  for (const s of t.samples) {
+    const bad = s.lvl >= 1 || s.thunder;     // da 1 mm/h in su, o temporale
+    if (bad) { if (!cur) groups.push(cur = []); cur.push(s); } else cur = null;
+  }
+  return groups.map(g => {
+    const worst = g.reduce((m, s) => s.mmh > m.mmh ? s : m, g[0]), mid = g[Math.floor(g.length / 2)];
+    const place = nearestPlace(mid, 25, 5);
+    return { g, worst, place, t0: g[0].eta, t1: g.at(-1).eta, k0: g[0].km, k1: g.at(-1).km,
+      thunder: g.some(s => s.thunder), lvl: Math.max(...g.map(s => s.lvl)) };
+  });
+}
+const rgb = (l, a = 1) => l < 0 ? "rgba(232,238,248," + a + ")" : `rgba(${COLORS[l][0]},${COLORS[l][1]},${COLORS[l][2]},${a})`;
+const durTxt = ms => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return (h ? h + " h " : "") + (m % 60) + " min"; };
+
+function renderTrip(t, out) {
+  out.innerHTML = "";
+  const add = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; out.appendChild(e); return e; };
+  const hz = groupHazards(t), worst = hz.reduce((m, h) => Math.max(m, h.lvl), -1);
+  const sum = add("div", "sum");
+  sum.innerHTML = `<b></b><div class="muted"></div>`;
+  sum.firstChild.textContent = hz.length ? (hz.length === 1 ? "Un tratto con pioggia" : hz.length + " tratti con pioggia") : "Nessuna pioggia forte sul percorso";
+  sum.lastChild.textContent = `${Math.round(t.total)} km · ${durTxt(t.arr - t.dep)} · arrivo alle ${fmtTime(t.arr)}` + (t.route.approx ? " (linea retta, stima)" : "");
+  // barra del percorso: un pezzo per ogni tratto tra due punti controllati
+  const strip = add("div", "strip");
+  for (let i = 0; i < t.samples.length - 1; i++) {
+    const a = t.samples[i], b = t.samples[i + 1], e = document.createElement("i");
+    e.style.flex = String(Math.max(0.0001, b.km - a.km));
+    e.style.background = rgb(Math.max(a.lvl, b.lvl));
+    strip.appendChild(e);
+  }
+  add("div", "stripLab", `<span>${fmtTime(t.dep)}</span><span>${fmtTime(t.arr)}</span>`);
+  if (!hz.length) add("div", "muted", "Fino a 1 mm/h non si considera. Controlla ancora prima di partire: le previsioni cambiano.");
+  for (const h of hz) {
+    const row = add("div", "haz");
+    const dot = document.createElement("i"); dot.style.background = rgb(h.lvl); row.appendChild(dot);
+    const body = document.createElement("div"); row.appendChild(body);
+    const title = document.createElement("b");
+    title.textContent = NAMES[h.lvl] + (h.thunder ? ", possibili temporali" : "") + " · " + mmTxt(h.worst.mmh);
+    const when = h.t0 === h.t1 ? "intorno alle " + fmtTime(h.t0) : "dalle " + fmtTime(h.t0) + " alle " + fmtTime(h.t1);
+    const where = (h.place ? "vicino a " + h.place.name + ", " : "") + (h.k0 === h.k1 ? "km " + Math.round(h.k0) : "km " + Math.round(h.k0) + "–" + Math.round(h.k1));
+    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where;
+    body.append(title, sub);
+    row.onclick = () => flyTo(h.worst.lat, h.worst.lon, 9.5);
+  }
+  const note = add("div", "muted", "Previsioni Open-Meteo" + (t.samples.some(s => s.radar !== null) ? " e radar" : "") + ". Ogni punto è controllato all'ora in cui ci arrivi.");
+  note.style.fontSize = "11px"; note.style.marginTop = "6px";
+  const bt = add("div", "rowbtns");
+  const edit = document.createElement("button"); edit.className = "sm"; edit.textContent = "Cambia";
+  edit.onclick = () => document.getElementById("tripView").classList.remove("compact");
+  const clr = document.createElement("button"); clr.className = "sm"; clr.id = "clearTrip"; clr.textContent = "Cancella percorso";
+  clr.onclick = () => { trip = null; out.innerHTML = ""; dirty = true; document.getElementById("tripView").classList.remove("compact"); };
+  bt.append(edit, clr);
+}
+
+const goBtn = document.getElementById("go"), tripOut = document.getElementById("tripOut");
+goBtn.onclick = async () => {
+  const a = fromI._pick, b = toI._pick;
+  tripOut.innerHTML = "";
+  const msg = (t, cls) => { const d = document.createElement("div"); d.className = cls || "muted"; d.textContent = t; tripOut.appendChild(d); };
+  if (!a || !b) { msg("Scegli partenza e arrivo dall'elenco che compare mentre scrivi.", "err"); return; }
+  let dep = depI.value ? new Date(depI.value).getTime() : Date.now();
+  if (!(dep > Date.now() - 3600000)) dep = Date.now();
+  goBtn.disabled = true; msg("Calcolo il percorso e controllo la pioggia…");
+  try {
+    trip = await computeTrip(a, b, dep);
+    renderTrip(trip, tripOut);
+    const xs = trip.verts.map(v => v.gx), ys = trip.verts.map(v => v.gy);
+    fitBox(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    // sul telefono il modulo si chiude e resta il riepilogo, così la mappa si vede
+    document.getElementById("tripView").classList.toggle("compact", window.innerWidth <= 640);
+  } catch (e) { tripOut.innerHTML = ""; msg("Non riesco a controllare il viaggio ora (" + (e.message || "errore") + "). Riprova tra poco.", "err"); }
+  goBtn.disabled = false;
+};
+function fitBox(gx0, gy0, gx1, gy1) {
+  const w = Math.max((gx1 - gx0) / N7, 1e-5), h = Math.max((gy1 - gy0) / N7, 1e-5);
+  const availW = window.innerWidth > 640 ? W - 380 : W - 40, availH = H - 230;
+  const z = Math.min(Math.log2(availW / (256 * w)), Math.log2(availH / (256 * h)));
+  view.zoom = clamp(z - 0.15, MIN_ZOOM, 11);
+  const n = worldSize();
+  view.mx = (gx0 + gx1) / 2 / N7 - (window.innerWidth > 640 ? 190 : 0) / n;
+  view.my = (gy0 + gy1) / 2 / N7 - (window.innerWidth > 640 ? 0 : H * 0.2) / n;
+  limitView(); dirty = true;
+}
+
+function drawRoute() {
+  if (marker) {
+    const n = worldSize(), [mx, my] = lonLatToNorm(marker.lon, marker.lat);
+    const sx = W / 2 + (mx - view.mx) * n, sy = H / 2 + (my - view.my) * n;
+    ctx.beginPath(); ctx.arc(sx, sy, 6, 0, 7); ctx.fillStyle = "#FFE600"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#0F1420"; ctx.stroke();
+  }
+  if (!trip) return;
+  const n = worldSize(), P = v => [W / 2 + (v.gx / N7 - view.mx) * n, H / 2 + (v.gy / N7 - view.my) * n];
+  ctx.lineJoin = ctx.lineCap = "round";
+  const path = (i0, i1) => { ctx.beginPath(); for (let i = i0; i <= i1; i++) { const [x, y] = P(trip.verts[i]); i === i0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } };
+  path(0, trip.verts.length - 1); ctx.lineWidth = 8; ctx.strokeStyle = "rgba(15,20,32,.92)"; ctx.stroke();
+  for (let k = 0; k < trip.samples.length - 1; k++) {
+    const a = trip.samples[k], b = trip.samples[k + 1];
+    path(a.vi, b.vi); ctx.lineWidth = 4.5; ctx.strokeStyle = rgb(Math.max(a.lvl, b.lvl)); ctx.stroke();
+  }
+  for (const s of trip.samples) if (s.thunder) {
+    const [x, y] = P(s); ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = "#FFE600"; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "#0F1420"; ctx.stroke();
+    ctx.fillStyle = "#0F1420"; ctx.font = "700 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", x, y + 0.5); ctx.textAlign = "start";
+  }
+  [[trip.verts[0], "#3DBE6B", "A"], [trip.verts.at(-1), "#E6493E", "B"]].forEach(([v, col, t]) => {
+    const [x, y] = P(v); ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y + 0.5); ctx.textAlign = "start";
+  });
+}
+
+// ---------------------------------------------------------------- avvio
+window.addEventListener("resize", () => { resize(); });
+resize(); fitItaly();
+window.__ms = { view, get trip() { return trip; }, setView, get frames() { return frames; }, showFrame, refresh, get ready() { return rainBusy.size === 0 && !dirty; } };
+euReady = loadEuManifest();
+loadMap().catch(e => setStatus("Mappa non caricata"));
+refresh(true);
+setInterval(() => refresh(false), 90000);
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+# Ogni 10 minuti: converte il radar europeo OPERA in tessere e ripubblica il sito.
+name: Pubblica sito e radar
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  costruisci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q h5py numpy pyproj scipy pillow
+      - name: Foto già convertite
+        uses: actions/cache@v4
+        with:
+          path: cache/tiles
+          key: tessere-${{ github.run_id }}
+          restore-keys: tessere-
+      - name: Sito
+        run: python3 tools/build_site.py dist
+      - name: Radar europeo in tessere
+        run: python3 tools/opera_tiles.py cache/tiles 13
+      - name: Unisci
+        run: |
+          mkdir -p dist/tiles
+          cp -r cache/tiles/. dist/tiles/
+          find dist/tiles -name .done -delete
+          du -sh dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  pubblica:
+    needs: costruisci
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
