@@ -323,6 +323,8 @@ let W = 0, H = 0, dpr = 1;
 const view = { mx: 0.534, my: 0.3, zoom: 5.6 };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const MIN_ZOOM = 2, MAX_ZOOM = 12;
+// La pioggia da satellite esiste solo tra 60 S e 70 N: la vista non esce da questa fascia (fuori, il radar apparirebbe "tirato").
+const LAT_N = 70, LAT_S = -60;
 
 function lonLatToNorm(lon, lat) {
   const s = Math.sin(clamp(lat, -85, 85) * Math.PI / 180);
@@ -338,16 +340,16 @@ function resize() {
   document.documentElement.classList.toggle("dock", dock);
   W = window.innerWidth - (dock ? 380 : 0); H = window.innerHeight;
   canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-  dirty = true;
+  limitView(); dirty = true;
 }
 function fitItaly() {
   const [x0, y0] = lonLatToNorm(6.2, 47.3), [x1, y1] = lonLatToNorm(19.0, 36.3);
   view.mx = (x0 + x1) / 2; view.my = (y0 + y1) / 2;
   const zx = Math.log2(W / (256 * (x1 - x0))), zy = Math.log2((H - 140) / (256 * (y1 - y0)));
-  view.zoom = clamp(Math.min(zx, zy) - 0.05, MIN_ZOOM, 8);
+  view.zoom = clamp(Math.min(zx, zy) - 0.05, minZoom(), 8);
 }
 function zoomAbout(sx, sy, newZoom) {
-  newZoom = clamp(newZoom, MIN_ZOOM, MAX_ZOOM);
+  newZoom = clamp(newZoom, minZoom(), MAX_ZOOM);
   const n0 = worldSize();
   const px = view.mx + (sx - W / 2) / n0, py = view.my + (sy - H / 2) / n0;
   view.zoom = newZoom;
@@ -355,8 +357,12 @@ function zoomAbout(sx, sy, newZoom) {
   view.mx = px - (sx - W / 2) / n1; view.my = py - (sy - H / 2) / n1;
   limitView(); dirty = true;
 }
+const bandTop = () => lonLatToNorm(0, LAT_N)[1], bandBot = () => lonLatToNorm(0, LAT_S)[1];
+const minZoom = () => Math.max(MIN_ZOOM, Math.log2(H / (256 * (bandBot() - bandTop()))));
 function limitView() {
-  view.my = clamp(view.my, 0.02, 0.98);
+  if (view.zoom < minZoom()) view.zoom = minZoom();
+  const half = H / 2 / worldSize();
+  view.my = clamp(view.my, bandTop() + half, bandBot() - half);
   view.mx = ((view.mx % 1) + 1) % 1;
 }
 function panBy(dx, dy) {
@@ -1319,14 +1325,14 @@ document.getElementById("euBtn").onclick = () => {
   if (tour === 0) { fitItaly(); dirty = true; return; }
   const [x0, y0] = lonLatToNorm(box[0], box[1]), [x1, y1] = lonLatToNorm(box[2], box[3]);
   view.mx = (x0 + x1) / 2; view.my = (y0 + y1) / 2;
-  view.zoom = clamp(Math.min(Math.log2(W / (256 * (x1 - x0))), Math.log2((H - 140) / (256 * (y1 - y0)))), MIN_ZOOM, 8);
+  view.zoom = clamp(Math.min(Math.log2(W / (256 * (x1 - x0))), Math.log2((H - 140) / (256 * (y1 - y0)))), minZoom(), 8);
   limitView(); dirty = true;
 };
 
 // ---------------------------------------------------------------- cerca un luogo
 function flyTo(lat, lon, zoom) {
   const [mx, my] = lonLatToNorm(lon, lat);
-  view.mx = mx; view.my = my; view.zoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM); limitView(); dirty = true;
+  view.mx = mx; view.my = my; view.zoom = clamp(zoom, minZoom(), MAX_ZOOM); limitView(); dirty = true;
 }
 const q = document.getElementById("q"), placeInfo = document.getElementById("placeInfo");
 attachAutocomplete(q, async p => {
@@ -1498,7 +1504,7 @@ function fitBox(gx0, gy0, gx1, gy1) {
   const w = Math.max((gx1 - gx0) / N7, 1e-5), h = Math.max((gy1 - gy0) / N7, 1e-5);
   const availW = window.innerWidth > 640 ? W - 380 : W - 40, availH = H - 230;
   const z = Math.min(Math.log2(availW / (256 * w)), Math.log2(availH / (256 * h)));
-  view.zoom = clamp(z - 0.15, MIN_ZOOM, 11);
+  view.zoom = clamp(z - 0.15, minZoom(), 11);
   const n = worldSize();
   view.mx = (gx0 + gx1) / 2 / N7 - (window.innerWidth > 640 ? 190 : 0) / n;
   view.my = (gy0 + gy1) / 2 / N7 - (window.innerWidth > 640 ? 0 : H * 0.2) / n;
