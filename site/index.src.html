@@ -1730,8 +1730,6 @@ function buildTimeline(t, hz, sg, ig, out) {
   const wrap = document.createElement("div"); wrap.className = "tl"; out.appendChild(wrap);
   const mk = (tag, cls, html, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; (parent || wrap).appendChild(e); return e; };
   mk("div", "tlT", "Meteo lungo il tuo percorso");
-  const last = t.stops.at(-1).label;
-  mk("div", "tlS", `La striscia è il tuo viaggio da A a ${last}: i colori dicono che tempo troverai in ogni punto, all'ora in cui ci arrivi. Passa sopra con il dito o il mouse.`);
   const body = mk("div", "tlBody");
   const icons = mk("div", "tlIc", null, body);
   const NI = 6;
@@ -1832,7 +1830,7 @@ function renderTrip(t, out) {
       : h.t0 === h.t1 ? "intorno alle " + fmtTime(h.t0) : "dalle " + fmtTime(h.t0) + " alle " + fmtTime(h.t1);
     const probs = h.g.map(x => x.prob).filter(v => v != null), prob = probs.length ? Math.max(...probs) : null;
     const where = (h.place ? "vicino a " + h.place.name + ", " : "") + (h.k0 === h.k1 ? "km " + Math.round(h.k0) : "km " + Math.round(h.k0) + "–" + Math.round(h.k1));
-    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where + " · " + confTxt(lead) + (prob != null ? " · probabilità " + prob + "%" : "");
+    const sub = document.createElement("div"); sub.className = "muted"; sub.textContent = when + " · " + where + " · " + confTxt(lead) + (h.g.some(x => x.radar !== null && x.radar >= LEVELS[0]) ? " · visto dal radar" : prob != null ? " · probabilità " + prob + "%" : "");
     body.append(title, sub);
     row.onclick = () => flyTo(h.worst.lat, h.worst.lon, 9.5);
   }
