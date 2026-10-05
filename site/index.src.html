@@ -62,7 +62,7 @@ ul.ac li{padding:8px 8px;border-radius:7px;cursor:pointer;display:flex;justify-c
 ul.ac li:hover{background:var(--hover)}
 ul.ac small{color:var(--text2);white-space:nowrap}
 #placeInfo,#tripOut{margin-top:6px;line-height:1.45}
-#tripOut{max-height:calc(100vh - 560px);min-height:120px;overflow:auto}
+#tripView{max-height:calc(100vh - 150px);overflow-y:auto;overscroll-behavior:contain}
 #placeInfo b{display:block;font-size:16px;margin-bottom:2px}
 .muted{color:var(--text2)}
 .sum{padding:8px 10px;border-radius:10px;background:var(--bg);margin-bottom:8px}
@@ -70,6 +70,26 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 .strip{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:8px 0 2px;background:var(--bg)}
 .strip i{display:block;height:100%}
 .stripLab{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:8px}
+.vclose{float:right;margin:-5px -5px 0 8px;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;font:14px/1 system-ui;display:grid;place-items:center;padding:0}
+.vclose:hover{background:var(--hover)}
+.lb{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;color:#fff;font:700 10px/1 system-ui;margin-right:6px;vertical-align:-3px}
+#addStop{align-self:flex-start;margin:-4px 0 10px;min-height:32px}
+#tripView.compact #addStop{display:none}
+.tl{margin:2px 0 10px}
+.tlT{font:600 13px system-ui}
+.tlS{font-size:11.5px;color:var(--text2);line-height:1.35;margin:2px 0 8px}
+.tlBody{position:relative;margin:0 20px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.tlIc{position:relative;height:24px}
+.tlIc span{position:absolute;top:0;transform:translateX(-50%);font-size:17px;line-height:24px}
+.tlBar{position:relative;margin-top:4px}
+.tlBar .strip{margin:0;height:14px;border-radius:7px}
+.tlPin{position:absolute;top:50%;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;border:2px solid #fff;color:#fff;font:700 11px/16px system-ui;text-align:center;cursor:pointer;padding:0;box-shadow:0 1px 3px #0008}
+.tlTk{position:relative;height:30px;margin-top:4px}
+.tlTk span{position:absolute;top:0;transform:translateX(-50%);font-size:10.5px;color:var(--text2);text-align:center;line-height:1.25;white-space:nowrap}
+.tlCur{position:absolute;top:0;height:46px;width:2px;margin-left:-1px;background:var(--text);opacity:.75;pointer-events:none;display:none}
+.tlTip{margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--bg);font-size:12.5px;line-height:1.45;min-height:40px}
+.tlTip b{font-size:13px}
+.tlSum{margin-top:8px;font-size:12.5px;line-height:1.45}
 .haz{display:flex;gap:10px;padding:8px 6px;border-top:1px solid var(--line);cursor:pointer;align-items:flex-start}
 .haz:hover{background:var(--hover)}
 .haz i{width:12px;height:12px;border-radius:50%;flex:none;margin-top:3px;border:1px solid #0008}
@@ -77,7 +97,7 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 .err{color:var(--err)}
 #clearTrip{margin-top:8px}
 #tripView.compact .field,#tripView.compact #go{display:none}
-#tripView.compact #tripOut{max-height:36vh;margin-top:0}
+#tripView.compact #tripOut{margin-top:0}
 .rowbtns{display:flex;gap:8px;margin-top:6px}
 #bar{position:fixed;left:calc((100% - var(--pw)) / 2);transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom)) + 22px);
   width:min(560px,calc(100% - var(--pw) - 24px));padding:10px 14px;z-index:3;display:flex;align-items:center;gap:12px}
@@ -189,18 +209,20 @@ body.radar #bar{display:flex}
 
 <div id="side">
   <div id="legend" class="card view">
-    <h4>Intensità</h4>
+    <h4><button class="vclose" data-close="legend" aria-label="Chiudi">✕</button>Intensità</h4>
   </div>
   <div id="searchView" class="card view" hidden>
-    <h4>Cerca un luogo</h4>
+    <h4><button class="vclose" data-close="search" aria-label="Chiudi">✕</button>Cerca un luogo</h4>
     <div class="field"><input id="q" type="text" placeholder="Città o paese" autocomplete="off" autocapitalize="words" spellcheck="false"></div>
     <div id="placeInfo" class="muted">Scrivi il nome e scegli dall'elenco.</div>
   </div>
   <div id="tripView" class="card view" hidden>
-    <h4>Il mio viaggio</h4>
-    <div class="field"><span>Da</span><div class="row"><input id="from" type="text" placeholder="Partenza" autocomplete="off" spellcheck="false"><button class="sm" id="useHere" title="La mia posizione" type="button">Io</button></div></div>
-    <div class="field"><span>A</span><input id="to" type="text" placeholder="Arrivo" autocomplete="off" spellcheck="false"></div>
-    <div class="field"><span>Partenza</span><select id="dep" aria-label="Quando parti"></select></div>
+    <h4><button class="vclose" data-close="trip" aria-label="Chiudi">✕</button>Il mio viaggio</h4>
+    <div class="field"><span>Partenza</span><div class="row"><input id="from" type="text" placeholder="Partenza" autocomplete="off" spellcheck="false"><button class="sm" id="useHere" title="La mia posizione" type="button">Io</button></div></div>
+    <div id="stops"></div>
+    <button class="sm" id="addStop" type="button">+ Aggiungi tappa</button>
+    <div class="field"><span>Arrivo</span><input id="to" type="text" placeholder="Arrivo" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><span>Orario di partenza</span><select id="dep" aria-label="Quando parti"></select></div>
     <button class="primary" id="go" type="button">Controlla il viaggio</button>
     <div id="tripOut"></div>
   </div>
@@ -1357,7 +1379,7 @@ const mmTxt = v => (v < 10 ? v.toFixed(1) : Math.round(v)).toString().replace(".
 
 async function forecastAt(points) {
   const q = "latitude=" + points.map(p => p.lat.toFixed(3)).join(",") + "&longitude=" + points.map(p => p.lon.toFixed(3)).join(",") +
-    "&minutely_15=precipitation&hourly=precipitation,precipitation_probability,weather_code,temperature_2m,snowfall&timeformat=unixtime&timezone=UTC&forecast_days=3";
+    "&minutely_15=precipitation&hourly=precipitation,precipitation_probability,weather_code,temperature_2m,snowfall,wind_speed_10m&timeformat=unixtime&timezone=UTC&forecast_days=3";
   const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
   if (!r.ok) throw new Error("previsioni " + r.status);
   const j = await r.json();
@@ -1366,7 +1388,7 @@ async function forecastAt(points) {
 // mm/h e temporale previsti in quel punto a quell'ora
 function modelAt(res, t) {
   const sec = Math.floor(t / 1000);
-  let mm = null, thunder = false, prob = null, temp = null, snowCm = 0, snow = false, glaze = false, wet = false;
+  let mm = null, thunder = false, prob = null, temp = null, snowCm = 0, snow = false, glaze = false, wet = false, code = null, wind = null;
   const m = res.minutely_15;
   if (m && m.time && m.precipitation) {
     const i = Math.floor((sec - m.time[0]) / 900);
@@ -1382,6 +1404,7 @@ function modelAt(res, t) {
       if (h.temperature_2m && h.temperature_2m[i] != null) temp = h.temperature_2m[i];
       if (h.snowfall && h.snowfall[i] != null) snowCm = h.snowfall[i];
       const c = h.weather_code ? h.weather_code[i] : 0;
+      code = c; if (h.wind_speed_10m && h.wind_speed_10m[i] != null) wind = h.wind_speed_10m[i];
       snow = (c >= 71 && c <= 77) || c === 85 || c === 86 || snowCm > 0;
       glaze = c === 56 || c === 57 || c === 66 || c === 67;
       // strada bagnata: piove adesso o e' piovuto nell'ora prima
@@ -1389,7 +1412,7 @@ function modelAt(res, t) {
     }
   }
   if (mm !== null && mm > 0.1) wet = true;
-  return { mm: mm === null ? 0 : mm, thunder, prob, temp, snowCm, snow, glaze, wet };
+  return { mm: mm === null ? 0 : mm, thunder, prob, temp, snowCm, snow, glaze, wet, code, wind };
 }
 // pioggia vista dal radar in quel punto (massimo attorno, circa 2,5 km); null se fuori copertura
 async function radarAt(lat, lon) {
@@ -1531,9 +1554,33 @@ document.getElementById("useHere").onclick = () => {
   }, () => setStatus("Posizione non disponibile"), { timeout: 8000 });
 };
 
-async function getRoute(a, b) {
+// ---- tappe: Partenza (A), tappe (B, C, ...), Arrivo. Le lettere seguono l'ordine in cui sono scritte, cioe' l'ordine del percorso.
+const LETTERS = "ABCDEFGHIJ", MAXSTOPS = 4;
+const pinColor = (i, n) => i === 0 ? "#3DBE6B" : i === n - 1 ? "#E6493E" : "#3D8BFF";
+const stopsBox = document.getElementById("stops"), addStopBtn = document.getElementById("addStop");
+const stopInputs = () => [...stopsBox.querySelectorAll("input")];
+function relabel() {
+  const ins = [fromI, ...stopInputs(), toI];
+  ins.forEach((inp, i) => {
+    const sp = inp.closest(".field").querySelector(":scope>span");
+    sp.innerHTML = `<i class="lb" style="background:${pinColor(i, ins.length)}">${LETTERS[i]}</i>${i === 0 ? "Partenza" : i === ins.length - 1 ? "Arrivo" : "Tappa"}`;
+  });
+  addStopBtn.hidden = stopInputs().length >= MAXSTOPS;
+}
+function addStop() {
+  const f = document.createElement("div"); f.className = "field";
+  f.innerHTML = '<span></span><div class="row"><input type="text" placeholder="Tappa" autocomplete="off" spellcheck="false"><button class="sm" type="button" title="Togli la tappa" aria-label="Togli la tappa">✕</button></div>';
+  stopsBox.appendChild(f);
+  const inp = f.querySelector("input"); attachAutocomplete(inp);
+  f.querySelector("button").onclick = () => { f.remove(); relabel(); };
+  relabel(); inp.focus();
+}
+addStopBtn.onclick = addStop;
+relabel();
+
+async function getRoute(pts) {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${pts.map(p => p.lon + "," + p.lat).join(";")}?overview=full&geometries=geojson`;
     const r = await fetch(url);
     if (!r.ok) throw new Error("routing " + r.status);
     const j = await r.json();
@@ -1541,20 +1588,34 @@ async function getRoute(a, b) {
     if (!rt) throw new Error("nessun percorso");
     return { coords: rt.geometry.coordinates, dur: rt.duration, approx: false };
   } catch (e) {
-    // senza servizio di percorsi: linea retta a 70 km/h (si dice chiaramente)
-    const n = 60, coords = [];
-    for (let i = 0; i <= n; i++) coords.push([a.lon + (b.lon - a.lon) * i / n, a.lat + (b.lat - a.lat) * i / n]);
-    return { coords, dur: distKm(a, b) * 1.25 / 70 * 3600, approx: true };
+    // senza servizio di percorsi: linee rette a 70 km/h (si dice chiaramente)
+    const coords = []; let dist = 0;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1], n = 60;
+      for (let i = k ? 1 : 0; i <= n; i++) coords.push([a.lon + (b.lon - a.lon) * i / n, a.lat + (b.lat - a.lat) * i / n]);
+      dist += distKm(a, b);
+    }
+    return { coords, dur: dist * 1.25 / 70 * 3600, approx: true };
   }
 }
 
-async function computeTrip(a, b, dep) {
-  const route = await getRoute(a, b);
+async function computeTrip(pts, dep) {
+  const a = pts[0], b = pts[pts.length - 1];
+  const route = await getRoute(pts);
   const verts = []; let km = 0;
   route.coords.forEach((c, i) => {
     if (i) km += distKm({ lat: route.coords[i - 1][1], lon: route.coords[i - 1][0] }, { lat: c[1], lon: c[0] });
     const [gx, gy] = toGlobal(c[1], c[0]);
     verts.push({ gx, gy, lat: c[1], lon: c[0], km });
+  });
+  // dove cadono partenza, tappe e arrivo lungo la strada (nell'ordine in cui sono indicati)
+  let fromVi = 0;
+  const stops = pts.map((p, i) => {
+    let vi = 0;
+    if (i === pts.length - 1) vi = verts.length - 1;
+    else if (i > 0) { let bd = 1e9; vi = fromVi; for (let k = fromVi; k < verts.length; k++) { const d = distKm(p, verts[k]); if (d < bd) { bd = d; vi = k; } } }
+    fromVi = vi;
+    return { label: LETTERS[i], name: p.name, lat: verts[vi].lat, lon: verts[vi].lon, vi, km: verts[vi].km, i, n: pts.length };
   });
   const total = km || 1, step = clamp(total / 30, 8, 25);
   const samples = [];
@@ -1568,7 +1629,7 @@ async function computeTrip(a, b, dep) {
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i], m = modelAt(fcs[i] || {}, s.eta);
     s.model = m.mm; s.thunder = m.thunder; s.prob = m.prob; s.radar = null;
-    s.temp = m.temp; s.snow = m.snow; s.snowCm = m.snowCm;
+    s.temp = m.temp; s.snow = m.snow; s.snowCm = m.snowCm; s.code = m.code; s.wind = m.wind;
     // ghiaccio: gelicidio, oppure strada bagnata con aria vicina allo zero (come nell'app; l'asfalto e' piu' freddo dell'aria)
     s.ice = !m.snow && (m.glaze || (m.wet && m.temp !== null && m.temp <= 3));
     s.iceLvl = !s.ice ? -1 : (m.glaze || (m.temp !== null && m.temp <= -1)) ? 2 : (m.temp !== null && m.temp <= 1) ? 1 : 0;
@@ -1578,7 +1639,7 @@ async function computeTrip(a, b, dep) {
     s.mmh = Math.max(s.model, s.radar || 0);
     s.lvl = levelOf(s.mmh);
   }
-  return { route, verts, samples, dep, total, arr: dep + route.dur * 1000, from: a, to: b };
+  return { route, verts, samples, stops, dep, total, arr: dep + route.dur * 1000, from: a, to: b, cursor: null };
 }
 
 // tratti consecutivi in cui una condizione (neve, ghiaccio) e' vera
@@ -1616,6 +1677,118 @@ const leadH = t => (t - Date.now()) / 3600000;
 const confTxt = h => h <= 2 ? "previsione affidabile" : h <= 6 ? "previsione abbastanza affidabile" : "previsione indicativa";
 const durTxt = ms => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return (h ? h + " h " : "") + (m % 60) + " min"; };
 
+// il sole e' sopra l'orizzonte? (formula approssimata: serve solo per scegliere sole o luna)
+function sunUp(lat, lon, t) {
+  const n = t / 86400000 + 2440587.5 - 2451545.0, R = Math.PI / 180;
+  const L = (280.46 + 0.9856474 * n) % 360, g = ((357.528 + 0.9856003 * n) % 360) * R;
+  const lam = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * R, eps = 23.439 * R;
+  const dec = Math.asin(Math.sin(eps) * Math.sin(lam)), ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam));
+  const lst = (((18.697374558 + 24.06570982441908 * n) % 24) * 15 + lon) * R;
+  const alt = Math.asin(Math.sin(lat * R) * Math.sin(dec) + Math.cos(lat * R) * Math.cos(dec) * Math.cos(lst - ra));
+  return alt > -0.01;
+}
+function wxIcon(s) {
+  if (s.thunder) return "⛈️";
+  if (s.snow) return "❄️";
+  if (s.lvl >= 0) return "🌧️";
+  if (s.ice) return "🧊";
+  const c = s.code, night = !sunUp(s.lat, s.lon, s.eta);
+  if (c === 45 || c === 48) return "🌫️";
+  if (c === 0 || c === 1) return night ? "🌙" : "☀️";
+  if (c === 2) return night ? "☁️" : "🌤️";
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "🌧️";
+  return "☁️";
+}
+const CODE_NAMES = { 0: "Sereno", 1: "Poco nuvoloso", 2: "Parzialmente nuvoloso", 3: "Coperto", 45: "Nebbia", 48: "Nebbia con brina" };
+function wxText(s) {
+  if (s.thunder) return "Temporale" + (s.lvl >= 0 ? ", " + mmTxt(s.mmh) : "");
+  if (s.snow) return SNOW_NAMES[s.snowLvl];
+  if (s.lvl >= 0) return NAMES[s.lvl] + ", " + mmTxt(s.mmh);
+  if (s.ice) return ICE_NAMES[s.iceLvl];
+  const c = s.code;
+  return CODE_NAMES[c] || (c >= 51 && c <= 67 ? "Pioviggine" : c == null ? "Meteo non disponibile" : "Nuvoloso");
+}
+function pointAtKm(t, km) {
+  const v = t.verts; let lo = 0, hi = v.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (v[m].km <= km) lo = m; else hi = m; }
+  const a = v[lo], b = v[hi], r = b.km > a.km ? clamp((km - a.km) / (b.km - a.km), 0, 1) : 0;
+  return { lat: a.lat + (b.lat - a.lat) * r, lon: a.lon + (b.lon - a.lon) * r };
+}
+function tripSummary(t, hz, sg, ig) {
+  const items = [];
+  const span = (h, name) => ({ k: h.k0, txt: name + (Math.round(h.k0) === Math.round(h.k1) ? " intorno al km " + Math.round(h.k0) : " tra il km " + Math.round(h.k0) + " e il km " + Math.round(h.k1)) + (h.place ? " (" + h.place.name + ")" : "") });
+  for (const h of hz) items.push(span(h, NAMES[h.lvl] + (h.thunder ? " con temporali" : "")));
+  for (const h of sg) items.push(span(h, SNOW_NAMES[h.lvl]));
+  for (const h of ig) items.push(span(h, ICE_NAMES[h.lvl]));
+  if (!items.length) return "Nessuna pioggia forte, neve o ghiaccio lungo il percorso.";
+  items.sort((a, b) => a.k - b.k);
+  const txt = items.map(x => x.txt).join(". ") + ". Nel resto del percorso nessun fenomeno rilevante.";
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+// la barra del meteo lungo il percorso: icone, tappe, orari, e una scheda che segue il dito o il mouse
+function buildTimeline(t, hz, sg, ig, out) {
+  const wrap = document.createElement("div"); wrap.className = "tl"; out.appendChild(wrap);
+  const mk = (tag, cls, html, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; (parent || wrap).appendChild(e); return e; };
+  mk("div", "tlT", "Meteo lungo il tuo percorso");
+  const last = t.stops.at(-1).label;
+  mk("div", "tlS", `La striscia è il tuo viaggio da A a ${last}: i colori dicono che tempo troverai in ogni punto, all'ora in cui ci arrivi. Passa sopra con il dito o il mouse.`);
+  const body = mk("div", "tlBody");
+  const icons = mk("div", "tlIc", null, body);
+  const NI = 6;
+  for (let i = 0; i < NI; i++) {
+    const f = (i + 0.5) / NI, km = f * t.total;
+    const s = t.samples.reduce((m, x) => Math.abs(x.km - km) < Math.abs(m.km - km) ? x : m, t.samples[0]);
+    const e = mk("span", null, wxIcon(s), icons); e.style.left = f * 100 + "%";
+  }
+  const barBox = mk("div", "tlBar", null, body);
+  const strip = mk("div", "strip", null, barBox);
+  for (let i = 0; i < t.samples.length - 1; i++) {
+    const a = t.samples[i], b = t.samples[i + 1], e = document.createElement("i");
+    e.style.flex = String(Math.max(0.0001, b.km - a.km));
+    const rl = Math.max(a.lvl, b.lvl);
+    // dove non piove forte ma c'e' neve o ghiaccio, il pezzo prende il loro colore
+    e.style.background = rl >= 1 || !(a.snow || b.snow || a.ice || b.ice) ? rgb(rl) : (a.snow || b.snow) ? "#E8F1FA" : "#7FD6E8";
+    strip.appendChild(e);
+  }
+  for (const st of t.stops) {
+    const b = mk("button", "tlPin", st.label, barBox); b.type = "button";
+    b.style.left = st.km / t.total * 100 + "%"; b.style.background = pinColor(st.i, st.n);
+    b.title = st.name + " — vai sulla mappa";
+    b.onpointerdown = e => e.stopPropagation();
+    b.onclick = e => { e.stopPropagation(); flyTo(st.lat, st.lon, 10); };
+  }
+  const ticks = mk("div", "tlTk", null, body);
+  for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+    const e = mk("span", null, fmtTime(t.dep + (t.arr - t.dep) * f) + "<br>" + Math.round(f * t.total) + " km", ticks); e.style.left = f * 100 + "%";
+  }
+  const cur = mk("div", "tlCur", null, body);
+  const tip = mk("div", "tlTip", "", wrap);
+  const idle = '<span class="muted">Tocca o passa sulla barra: qui vedrai km, ora, meteo e temperatura di quel punto.</span>';
+  tip.innerHTML = idle;
+  let hideT = 0;
+  const show = ev => {
+    const r = body.getBoundingClientRect(), f = clamp((ev.clientX - r.left) / r.width, 0, 1), km = f * t.total;
+    const s = t.samples.reduce((m, x) => Math.abs(x.km - km) < Math.abs(m.km - km) ? x : m, t.samples[0]);
+    const pt = pointAtKm(t, km), eta = t.dep + (t.arr - t.dep) * f, place = nearestPlace(pt, 25, 5);
+    cur.style.display = "block"; cur.style.left = f * 100 + "%";
+    t.cursor = pt; dirty = true;
+    const bits = [];
+    if (s.temp != null) bits.push(tempTxt(s.temp));
+    if (s.wind != null) bits.push("vento " + Math.round(s.wind) + " km/h");
+    tip.innerHTML = "";
+    const h = document.createElement("div"); h.innerHTML = "<b></b>"; h.firstChild.textContent = "km " + Math.round(km) + " · " + fmtTime(eta) + (place ? " · vicino a " + place.name : "");
+    const w = document.createElement("div"); w.textContent = wxIcon({ ...s, eta }) + " " + wxText(s) + (bits.length ? " · " + bits.join(" · ") : "");
+    tip.append(h, w);
+    if (s.ice && !s.snow) { const n = document.createElement("div"); n.className = "muted"; n.textContent = "Strada bagnata e freddo: possibile ghiaccio."; tip.appendChild(n); }
+  };
+  const hide = () => { cur.style.display = "none"; t.cursor = null; dirty = true; tip.innerHTML = idle; };
+  body.addEventListener("pointerdown", ev => { clearTimeout(hideT); try { body.setPointerCapture(ev.pointerId); } catch {} show(ev); });
+  body.addEventListener("pointermove", ev => { if (ev.pointerType === "mouse" || ev.buttons) show(ev); });
+  body.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") hide(); });
+  body.addEventListener("pointerup", ev => { if (ev.pointerType !== "mouse") { clearTimeout(hideT); hideT = setTimeout(hide, 6000); } });
+  mk("div", "tlSum", null).textContent = tripSummary(t, hz, sg, ig);
+}
+
 function renderTrip(t, out) {
   out.innerHTML = "";
   const add = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; out.appendChild(e); return e; };
@@ -1629,17 +1802,7 @@ function renderTrip(t, out) {
   if (ig.length) heads.push(ig.length === 1 ? "rischio ghiaccio" : "rischio ghiaccio in " + ig.length + " tratti");
   sum.firstChild.textContent = heads.length ? heads.join(", ").replace(/^./, c => c.toUpperCase()) : "Nessuna pioggia forte, neve o ghiaccio sul percorso";
   sum.lastChild.textContent = `${Math.round(t.total)} km · ${durTxt(t.arr - t.dep)} · arrivo alle ${fmtTime(t.arr)}` + (t.route.approx ? " (linea retta, stima)" : "");
-  // barra del percorso: un pezzo per ogni tratto tra due punti controllati
-  const strip = add("div", "strip");
-  for (let i = 0; i < t.samples.length - 1; i++) {
-    const a = t.samples[i], b = t.samples[i + 1], e = document.createElement("i");
-    e.style.flex = String(Math.max(0.0001, b.km - a.km));
-    const rl = Math.max(a.lvl, b.lvl);
-    // dove non piove forte ma c'e' neve o ghiaccio, il pezzo prende il loro colore
-    e.style.background = rl >= 1 || !(a.snow || b.snow || a.ice || b.ice) ? rgb(rl) : (a.snow || b.snow) ? "#E8F1FA" : "#7FD6E8";
-    strip.appendChild(e);
-  }
-  add("div", "stripLab", `<span>${fmtTime(t.dep)}</span><span>${fmtTime(t.arr)}</span>`);
+  buildTimeline(t, hz, sg, ig, out);
   if (!hz.length) add("div", "muted", "Fino a 1 mm/h non si considera. Controlla ancora prima di partire: le previsioni cambiano.");
   const winterRow = (h, emoji, names) => {
     const row = add("div", "haz");
@@ -1686,20 +1849,20 @@ function renderTrip(t, out) {
 
 const goBtn = document.getElementById("go"), tripOut = document.getElementById("tripOut");
 goBtn.onclick = async () => {
-  const a = fromI._pick, b = toI._pick;
+  const ins = [fromI, ...stopInputs(), toI], pts = ins.map(x => x._pick);
   tripOut.innerHTML = "";
   const msg = (t, cls) => { const d = document.createElement("div"); d.className = cls || "muted"; d.textContent = t; tripOut.appendChild(d); };
-  if (!a || !b) { msg("Scegli partenza e arrivo dall'elenco che compare mentre scrivi.", "err"); return; }
+  if (pts.some(x => !x)) { msg("Scegli ogni punto (partenza, tappe, arrivo) dall'elenco che compare mentre scrivi.", "err"); return; }
   let dep = +depI.value || Date.now();
   if (!(dep > Date.now() - 3600000)) dep = Date.now();
   goBtn.disabled = true; msg("Calcolo il percorso e controllo la pioggia…");
   try {
-    trip = await computeTrip(a, b, dep);
+    trip = await computeTrip(pts, dep);
     renderTrip(trip, tripOut);
     const xs = trip.verts.map(v => v.gx), ys = trip.verts.map(v => v.gy);
     fitBox(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
-    // sul telefono il modulo si chiude e resta il riepilogo, così la mappa si vede
-    document.getElementById("tripView").classList.toggle("compact", window.innerWidth <= 640);
+    // il modulo si chiude e resta il riepilogo ("Cambia" lo riapre), così la mappa si vede
+    document.getElementById("tripView").classList.add("compact");
   } catch (e) { tripOut.innerHTML = ""; msg("Non riesco a controllare il viaggio ora (" + (e.message || "errore") + "). Riprova tra poco.", "err"); }
   goBtn.disabled = false;
 };
@@ -1714,6 +1877,7 @@ function fitBox(gx0, gy0, gx1, gy1) {
   limitView(); dirty = true;
 }
 
+const toGlobalV = c => { const [gx, gy] = toGlobal(c.lat, c.lon); return { gx, gy }; };
 function drawRoute() {
   if (marker) {
     const n = worldSize(), [mx, my] = lonLatToNorm(marker.lon, marker.lat);
@@ -1734,12 +1898,24 @@ function drawRoute() {
     ctx.lineWidth = 1.5; ctx.strokeStyle = "#0F1420"; ctx.stroke();
     ctx.fillStyle = "#0F1420"; ctx.font = "700 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", x, y + 0.5); ctx.textAlign = "start";
   }
-  [[trip.verts[0], "#3DBE6B", "A"], [trip.verts.at(-1), "#E6493E", "B"]].forEach(([v, col, t]) => {
-    const [x, y] = P(v); ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.fillStyle = col; ctx.fill();
+  trip.stops.forEach(st => {
+    const [x, y] = P(trip.verts[st.vi]); ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.fillStyle = pinColor(st.i, st.n); ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
-    ctx.fillStyle = "#fff"; ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y + 0.5); ctx.textAlign = "start";
+    ctx.fillStyle = "#fff"; ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(st.label, x, y + 0.5); ctx.textAlign = "start";
   });
+  if (trip.cursor) {
+    const [x, y] = P(toGlobalV(trip.cursor)); ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = "#FFE600"; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "#0F1420"; ctx.stroke();
+  }
 }
+
+// X sui pannelli: chiude il pannello e toglie dalla mappa quello che il pannello aveva messo (percorso, segnaposto)
+document.querySelectorAll(".vclose").forEach(b => b.onclick = () => {
+  const k = b.dataset.close;
+  if (k === "trip") { trip = null; tripOut.innerHTML = ""; document.getElementById("tripView").classList.remove("compact"); }
+  if (k === "search") { marker = null; placeInfo.innerHTML = '<span class="muted">Scrivi il nome e scegli dall\'elenco.</span>'; q.value = ""; }
+  setView(null); dirty = true;
+});
 
 // ---------------------------------------------------------------- tema (scuro / chiaro 1 / chiaro 2)
 let themeName = "dark";
