@@ -39,7 +39,7 @@ jobs:
         run: python3 tools/opera_tiles.py cache/tiles 13
       - name: Diagnostica copertura radar
         continue-on-error: true
-        run: echo "::notice title=copertura::$(python3 tools/diag.py cache/tiles | cut -c1-1500)"
+        run: echo "::notice title=copertura::$(python3 tools/diag.py cache/tiles | cut -c1-2500)"
       - name: Pioggia da satellite (NOAA) in tessere
         continue-on-error: true
         run: python3 tools/noaa_tiles.py cache/noaa 7 2>&1 | tee cache/noaa.log; echo "::notice title=noaa-log::$(tail -n 6 cache/noaa.log | tr '\n' '|' | cut -c1-600)"
