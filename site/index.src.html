@@ -618,7 +618,8 @@ function drawPlaces() {
   if (!MAP || !MAP[L_PLACES]) return;
   const n = worldSize(), lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * view.my))) * 180 / Math.PI;
   const km = W * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, view.zoom) / 1000;
-  const maxKind = km <= 15 ? 6 : km <= 35 ? 5 : km <= 70 ? 4 : km <= 150 ? 3 : km <= 400 ? 2 : 1;
+  const mpp = 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, view.zoom);   // metri per pixel
+  const maxKind = mpp <= 35 ? 7 : km <= 15 ? 6 : km <= 35 ? 5 : km <= 70 ? 4 : km <= 150 ? 3 : km <= 400 ? 2 : 1;
   const taken = []; let count = 0;
   ctx.textBaseline = "middle";
   for (const p of MAP[L_PLACES]) {
