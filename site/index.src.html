@@ -122,6 +122,8 @@ body.radar #bar{display:flex}
 #status{position:fixed;left:calc((100% - var(--pw)) / 2);transform:translateX(-50%);top:max(12px,env(safe-area-inset-top));z-index:3;
   padding:6px 12px;font-size:12px;color:var(--text2);display:none;text-align:center;pointer-events:none;
   max-width:calc(100% - var(--pw) - 130px)}
+#cov{position:fixed;left:calc((100% - var(--pw)) / 2);transform:translateX(-50%);bottom:34px;z-index:3;padding:6px 12px;font-size:12px;
+  color:var(--text2);display:none;text-align:center;pointer-events:none;max-width:calc(100% - var(--pw) - 40px)}
 #credits{position:fixed;left:0;right:var(--pw);bottom:0;padding:3px 10px max(3px,env(safe-area-inset-bottom));z-index:3;
   font-size:10.5px;color:var(--text2);background:var(--bgfade);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #credits a{color:var(--text2)}
@@ -308,6 +310,7 @@ body.radar #bar{display:flex}
 </div>
 
 <div id="status" class="card"></div>
+<div id="cov" class="card"></div>
 
 <div id="bar" class="card">
   <button id="play" aria-label="Avvia il film"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4.5v15l13-7.5z"/></svg></button>
@@ -659,6 +662,7 @@ const BMP_OPTS = { colorSpaceConversion: "none", premultiplyAlpha: "none" };
 
 // Italia: radar della Protezione Civile. -1 = nessun dato.
 const dpcCache = new Map();
+const dpcHas = new Set();   // tessere per cui il radar italiano ha almeno una foto: se un'altra manca, e' un buco, non "fuori copertura"
 // Il radar italiano esiste solo attorno all'Italia: fuori da lì non si chiede nemmeno (meno richieste, niente errori).
 function nearItaly(x, y) {
   const lon0 = x / 128 * 360 - 180, lon1 = (x + 1) / 128 * 360 - 180;
@@ -678,6 +682,7 @@ function dpcTile(t, x, y) {
         if (r.status === 403 || r.status === 404) return null;   // fuori copertura o non ancora pubblicata
         if (!r.ok) throw new Error("HTTP " + r.status);
         const px = pixelsOf(await createImageBitmap(await r.blob(), BMP_OPTS));
+        dpcHas.add(x + "/" + y);
         const out = new Float32Array(65536);
         // il radar mette 0..100 mm/h nel canale rosso; trasparente = nessun dato
         for (let i = 0; i < 65536; i++) out[i] = px[i * 4 + 3] < 128 ? -1 : px[i * 4] * (100 / 255);
@@ -848,7 +853,7 @@ async function loadNoaaManifest() {
 }
 function noaaFrameFor(t) {
   let best = null;
-  for (const f of noaaFrames) if (Math.abs(f - t) <= 12 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
+  for (const f of noaaFrames) if (Math.abs(f - t) <= 16 * 60000 && (best === null || Math.abs(f - t) < Math.abs(best - t))) best = f;
   const last = noaaFrames[noaaFrames.length - 1];
   if (best === null && last !== undefined && t > last && t - last <= 50 * 60000) best = last;   // l'ultima foto del satellite ha circa 30 minuti di ritardo
   return best;
@@ -883,6 +888,17 @@ async function noaaTile(t, zl, x, y) {
 }
 
 // Una tessera dati: l'Italia dal radar nazionale, dove non vede si completa con quello europeo.
+// Se la foto del radar italiano manca (non ancora pubblicata, o buco del server) ma la zona di solito e' coperta,
+// si usa la foto vicina dello stesso radar: il film non salta su un'altra fonte, con un'altra posizione.
+async function dpcFilled(t, x, y) {
+  const d = await dpcTile(t, x, y);
+  if (d || !dpcHas.has(x + "/" + y)) return d;
+  for (const off of [-STEP, STEP, -2 * STEP]) {
+    const o = await dpcTile(t + off, x, y).catch(() => null);
+    if (o) return o;
+  }
+  return null;
+}
 const dataCache = new Map(); // "tempo/livello/x/y" -> Promise<Float32Array|null>
 // Ordine di fiducia per ogni pixel: radar italiano, radar europeo, satellite.
 function dataTile(t, zl, x, y) {
@@ -890,19 +906,22 @@ function dataTile(t, zl, x, y) {
   let p = dataCache.get(key);
   if (p) return p;
   let failed = false;
-  p = Promise.all([zl === DATA_Z ? dpcTile(t, x, y).catch(() => { failed = true; return null; }) : null,
+  p = Promise.all([zl === DATA_Z ? dpcFilled(t, x, y).catch(() => { failed = true; return null; }) : null,
                    euReady.then(() => euTile(t, zl, x, y)).catch(() => { failed = true; return null; }),
                    noaaTile(t, zl, x, y).catch(() => { failed = true; return null; })]).then(([d, e, n]) => {
     if (failed) setTimeout(() => dataCache.delete(key), 0);   // non si ricorda: la prossima volta si riscarica
     if (!d && !e && !n && !failed) return null;
     const out = new Float32Array(65536);
     if (failed) out.partial = true;
+    let nr = 0, ns = 0;   // pixel coperti da un radar / solo dal satellite
     for (let i = 0; i < 65536; i++) {
       let v = d ? d[i] : -1;
       if (v < 0) v = e ? e[i] : -1;
-      if (v < 0) v = n ? n[i] : -1;
+      if (v >= 0) nr++;
+      else { v = n ? n[i] : -1; if (v >= 0) ns++; }
       out[i] = v < 0 ? 0 : v;
     }
+    out.radarPx = nr; out.satPx = ns;
     return out;
   });
   p.catch(() => dataCache.delete(key));
@@ -1125,6 +1144,24 @@ const rainZoom = () => clamp(Math.round(view.zoom) + (dpr >= 1.5 ? 1 : 0), 3, 11
 let radarOn = false, radarTimers = [];
 let dirty = true, frames = [], cur = 0, here = null, marker = null, trip = null;
 
+// Avviso di copertura: dice che cosa si sta guardando al centro della mappa (radar, stima da satellite, niente).
+let covTimer = 0, covKey = "";
+function covSoon() { clearTimeout(covTimer); covTimer = setTimeout(updateCoverage, 500); }
+async function updateCoverage() {
+  const el = document.getElementById("cov");
+  const hide = () => { el.style.display = "none"; covKey = ""; };
+  if (!radarOn || !frames.length || view.zoom < 4.5) return hide();
+  const key0 = `${frames[cur]}|${view.mx.toFixed(3)}|${view.my.toFixed(3)}|${view.zoom.toFixed(1)}`;
+  if (key0 === covKey) return;
+  covKey = key0;
+  const tx = Math.floor(view.mx * Math.pow(2, DATA_Z)), ty = Math.floor(view.my * Math.pow(2, DATA_Z));
+  let arr; try { arr = await dataTile(frames[cur], DATA_Z, tx, ty); } catch { return; }
+  if (key0 !== covKey) return;
+  let msg = "";
+  if (!arr || (!arr.radarPx && !arr.satPx)) msg = "Qui non ci sono dati di pioggia.";
+  else if (arr.radarPx < 20000) msg = arr.satPx > 20000 ? "Qui non c'è il radar: la pioggia è una stima da satellite, meno precisa e con circa mezz'ora di ritardo." : "Qui il radar copre solo in parte la zona.";
+  el.textContent = msg; el.style.display = msg ? "block" : "none";
+}
 let statusTimer = null;
 function setStatus(msg, ms) {
   const s = document.getElementById("status");
@@ -1175,6 +1212,7 @@ function draw() {
   drawPlaces();
   drawRoute();
   watchFilm();
+  covSoon();
 
   if (here) {
     const n = worldSize(), [mx, my] = lonLatToNorm(here.lon, here.lat);
