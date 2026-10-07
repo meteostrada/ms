@@ -1,0 +1,36 @@
+# Tiene viva la catena: a ogni fine di "Pubblica sito e radar" (riuscito, fallito o annullato) accoda il giro successivo.
+# Se un giro e' rimasto bloccato in attesa da piu' di 25 minuti lo annulla, cosi' non ferma la coda.
+name: Catena radar
+on:
+  workflow_run:
+    workflows: ["Pubblica sito e radar"]
+    types: [completed]
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: catena
+  cancel-in-progress: true
+jobs:
+  prossima:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+        run: |
+          sleep 420
+          now=$(date +%s)
+          for st in waiting queued pending in_progress; do
+            gh api "repos/$R/actions/workflows/pubblica.yml/runs?status=$st&per_page=20" \
+              --jq '.workflow_runs[]|"\(.id) \(.created_at)"' >> /tmp/runs.txt || true
+          done
+          n=0
+          while read id ts; do
+            [ -z "$id" ] && continue
+            age=$(( now - $(date -d "$ts" +%s) ))
+            if [ "$age" -gt 1500 ]; then
+              echo "annullo giro bloccato $id (${age}s)"; gh api -X POST "repos/$R/actions/runs/$id/cancel" || true
+            else n=$((n+1)); fi
+          done < /tmp/runs.txt
+          if [ "$n" -eq 0 ]; then gh workflow run pubblica.yml --repo "$R" --ref main; echo "giro accodato"; else echo "ci sono gia' $n giri attivi"; fi
