@@ -891,13 +891,29 @@ async function noaaTile(t, zl, x, y) {
 // Se la foto del radar italiano manca (non ancora pubblicata, o buco del server) ma la zona di solito e' coperta,
 // si usa la foto vicina dello stesso radar: il film non salta su un'altra fonte, con un'altra posizione.
 async function dpcFilled(t, x, y) {
-  const d = await dpcTile(t, x, y);
-  if (d || !dpcHas.has(x + "/" + y)) return d;
-  for (const off of [-STEP, STEP, -2 * STEP]) {
-    const o = await dpcTile(t + off, x, y).catch(() => null);
-    if (o) return o;
+  let d = await dpcTile(t, x, y);
+  if (!d && !dpcHas.has(x + "/" + y)) return d;
+  if (!d) {
+    for (const off of [-STEP, STEP, -2 * STEP]) {
+      const o = await dpcTile(t + off, x, y).catch(() => null);
+      if (o) return o;
+    }
+    return null;
   }
-  return null;
+  // Il mosaico italiano ogni tanto perde un radar per una foto (si vede dai pixel "senza dato" che nelle foto vicine ci sono):
+  // quei pixel si prendono dalla foto di 5 minuti prima o dopo, cosi' la pioggia non sparisce e ritorna.
+  let gaps = 0; for (let i = 0; i < 65536; i++) if (d[i] < 0) gaps++;
+  if (!gaps) return d;
+  let merged = null;
+  for (const off of [-STEP, STEP]) {
+    const o = await dpcTile(t + off, x, y).catch(() => null);
+    if (!o) continue;
+    const m = merged || Float32Array.from(d);
+    let used = false;
+    for (let i = 0; i < 65536; i++) if (m[i] < 0 && o[i] >= 0) { m[i] = o[i]; used = true; }
+    if (used) merged = m;
+  }
+  return merged || d;
 }
 const dataCache = new Map(); // "tempo/livello/x/y" -> Promise<Float32Array|null>
 // Ordine di fiducia per ogni pixel: radar italiano, radar europeo, satellite.
