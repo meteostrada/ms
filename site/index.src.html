@@ -891,29 +891,26 @@ async function noaaTile(t, zl, x, y) {
 // Se la foto del radar italiano manca (non ancora pubblicata, o buco del server) ma la zona di solito e' coperta,
 // si usa la foto vicina dello stesso radar: il film non salta su un'altra fonte, con un'altra posizione.
 async function dpcFilled(t, x, y) {
-  let d = await dpcTile(t, x, y);
+  const d = await dpcTile(t, x, y);
   if (!d && !dpcHas.has(x + "/" + y)) return d;
-  if (!d) {
-    for (const off of [-STEP, STEP, -2 * STEP]) {
-      const o = await dpcTile(t + off, x, y).catch(() => null);
-      if (o) return o;
-    }
-    return null;
+  const prev = await dpcTile(t - STEP, x, y).catch(() => null);
+  const next = await dpcTile(t + STEP, x, y).catch(() => null);
+  if (!d) return prev || next || await dpcTile(t - 2 * STEP, x, y).catch(() => null);
+  if (!prev && !next) return d;
+  // Il mosaico italiano ogni tanto, per una sola foto, perde un radar: i pixel diventano "senza dato" oppure segnano pioggia zero
+  // dove nelle foto di 5 minuti prima e dopo c'e' pioggia (la striscia sparisce e ritorna). Quei pixel si ricostruiscono dalle foto vicine.
+  const T = 0.3;
+  let m = null;
+  for (let i = 0; i < 65536; i++) {
+    const v = d[i];
+    if (v >= T) continue;
+    const p = prev ? prev[i] : -1, n = next ? next[i] : -1;
+    let nv = v;
+    if (p >= T && n >= T) nv = (p + n) / 2;
+    else if (v < 0) nv = p >= 0 ? p : n;
+    if (nv !== v) { if (!m) m = Float32Array.from(d); m[i] = nv; }
   }
-  // Il mosaico italiano ogni tanto perde un radar per una foto (si vede dai pixel "senza dato" che nelle foto vicine ci sono):
-  // quei pixel si prendono dalla foto di 5 minuti prima o dopo, cosi' la pioggia non sparisce e ritorna.
-  let gaps = 0; for (let i = 0; i < 65536; i++) if (d[i] < 0) gaps++;
-  if (!gaps) return d;
-  let merged = null;
-  for (const off of [-STEP, STEP]) {
-    const o = await dpcTile(t + off, x, y).catch(() => null);
-    if (!o) continue;
-    const m = merged || Float32Array.from(d);
-    let used = false;
-    for (let i = 0; i < 65536; i++) if (m[i] < 0 && o[i] >= 0) { m[i] = o[i]; used = true; }
-    if (used) merged = m;
-  }
-  return merged || d;
+  return m || d;
 }
 const dataCache = new Map(); // "tempo/livello/x/y" -> Promise<Float32Array|null>
 // Ordine di fiducia per ogni pixel: radar italiano, radar europeo, satellite.
