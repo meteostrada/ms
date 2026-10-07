@@ -1,6 +1,6 @@
 # Converte il radar europeo (OPERA) e il satellite (NOAA) in tessere e ripubblica il sito, circa ogni 10 minuti.
-# Il timer di GitHub (schedule) non e' affidabile. Il giro successivo lo accoda il flusso "Catena radar" (catena.yml),
-# che parte a ogni fine giro, anche se il giro e' stato annullato o e' fallito.
+# Il timer di GitHub (schedule) non e' affidabile. Il giro successivo lo accoda il job "prossima" qui sotto; se il giro viene annullato
+# prima, il flusso "Catena radar" (catena.yml, a fine giro e ogni 20 minuti) lo riaccoda.
 name: Pubblica sito e radar
 on:
   schedule:
@@ -55,6 +55,25 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  prossima:
+    # Accoda il giro successivo dopo 9 minuti, ma solo se non ce ne e' gia' uno attivo (gli altri giri non partono da soli piu' di una volta).
+    # "Catena radar" (catena.yml) e' la rete di sicurezza se questo giro viene annullato prima di arrivare qui.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+          ME: ${{ github.run_id }}
+        run: |
+          sleep 540
+          n=0
+          for st in waiting queued pending in_progress; do
+            n=$((n + $(gh api "repos/$R/actions/workflows/pubblica.yml/runs?status=$st&per_page=20" --jq "[.workflow_runs[]|select(.id!=$ME)]|length")))
+          done
+          if [ "$n" -eq 0 ]; then gh workflow run pubblica.yml --repo "$R" --ref main; echo "giro accodato"; else echo "ci sono gia' $n altri giri"; fi
   pubblica:
     needs: costruisci
     runs-on: ubuntu-latest

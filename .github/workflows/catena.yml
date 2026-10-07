@@ -5,6 +5,8 @@ on:
   workflow_run:
     workflows: ["Pubblica sito e radar"]
     types: [completed]
+  schedule:
+    - cron: "7,27,47 * * * *"
 permissions:
   actions: write
   contents: read
@@ -19,7 +21,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           R: ${{ github.repository }}
         run: |
-          sleep 420
+          [ "${{ github.event_name }}" = workflow_run ] && sleep 420
           now=$(date +%s)
           for st in waiting queued pending in_progress; do
             gh api "repos/$R/actions/workflows/pubblica.yml/runs?status=$st&per_page=20" \
