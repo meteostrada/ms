@@ -1365,7 +1365,7 @@ document.getElementById("locate").onclick = () => {
   }, () => setStatus("Posizione non disponibile"), { timeout: 8000 });
 };
 
-// ---------------------------------------------------------------- luoghi (dalla mappa dell'app, senza servizi esterni)
+// ---------------------------------------------------------------- luoghi (nomi della mappa dell'app; la ricerca aggiunge Open-Meteo)
 const norm = t => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 let PLACES = [];
 const toLatLon = (gx, gy) => ({
@@ -1405,20 +1405,49 @@ function findPlaces(q, limit = 7) {
   const by = (a, b) => a.kind - b.kind || a.key.length - b.key.length;
   return starts.sort(by).concat(has.sort(by)).slice(0, limit);
 }
+// Ricerca dei luoghi: prima i nomi della mappa (subito, senza rete), poi, se si scrive almeno 3 lettere, anche
+// l'archivio gratuito di Open-Meteo (milioni di localita'). Cosi' si trova qualsiasi paese senza appesantire la mappa.
+const GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
+async function geoSearch(text, signal) {
+  const r = await fetch(GEO_URL + "?name=" + encodeURIComponent(text) + "&count=6&language=it&format=json", { signal });
+  if (!r.ok) throw new Error("ricerca " + r.status);
+  const j = await r.json();
+  return (j.results || []).filter(x => typeof x.latitude === "number" && typeof x.longitude === "number").map(x => ({
+    name: x.name, lat: x.latitude, lon: x.longitude, online: true,
+    where: [x.admin2, x.admin1 && x.admin1 !== x.admin2 ? x.admin1 : "", x.country_code && x.country_code !== "IT" ? x.country : ""].filter(Boolean).join(", ") }));
+}
 function attachAutocomplete(input, onPick) {
   const ul = document.createElement("ul"); ul.className = "ac";
   input.closest(".field").appendChild(ul);
-  let items = [];
-  const choose = p => { input.value = p.name; input._pick = p; ul.innerHTML = ""; items = []; if (onPick) onPick(p); };
-  input.addEventListener("input", () => {
-    input._pick = null; items = findPlaces(input.value); ul.innerHTML = "";
+  let items = [], seq = 0, timer = 0, abort = null;
+  const choose = p => { input.value = p.name; input._pick = p; ul.innerHTML = ""; items = []; seq++; if (abort) abort.abort(); if (onPick) onPick(p); };
+  const render = () => {
+    ul.innerHTML = "";
     for (const p of items) {
-      const li = document.createElement("li"), near = p.kind > 2 ? nearestPlace(p, 120, 2, p) : null;
+      const li = document.createElement("li");
+      const near = !p.online && p.kind > 2 ? nearestPlace(p, 120, 2, p) : null;
       li.innerHTML = `<span></span><small></small>`;
-      li.firstChild.textContent = p.name; li.lastChild.textContent = near ? "presso " + near.name : "";
+      li.firstChild.textContent = p.name;
+      li.lastChild.textContent = p.online ? p.where : near ? "presso " + near.name : "";
       li.addEventListener("pointerdown", e => { e.preventDefault(); choose(p); });
       ul.appendChild(li);
     }
+  };
+  input.addEventListener("input", () => {
+    input._pick = null; items = findPlaces(input.value); render();
+    clearTimeout(timer); if (abort) abort.abort();
+    const text = input.value.trim(), mine = ++seq;
+    if (text.length < 3) return;
+    timer = setTimeout(async () => {
+      abort = new AbortController();
+      try {
+        const found = await geoSearch(text, abort.signal);
+        if (mine !== seq || input.value.trim() !== text) return;
+        // via quelli gia' presenti nella mappa (stesso nome, a meno di 8 km)
+        const extra = found.filter(f => !items.some(l => l.key === norm(f.name) && distKm(l, f) < 8));
+        items = items.concat(extra).slice(0, 10); render();
+      } catch { /* senza rete restano i nomi della mappa */ }
+    }, 350);
   });
   input.addEventListener("keydown", e => { if (e.key === "Enter" && items[0]) { e.preventDefault(); choose(items[0]); } });
   input.addEventListener("blur", () => setTimeout(() => { ul.innerHTML = ""; }, 150));
