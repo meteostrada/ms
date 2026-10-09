@@ -105,8 +105,9 @@ ul.ac small{color:var(--text2);white-space:nowrap}
 body.radar #bar{display:flex}
 #tools button.on{background:var(--info);border-color:var(--info)}
 #tools button.on svg{stroke:var(--onaccent)}
-#tools button.busy svg{animation:spin 1.1s linear infinite}
+#tools button.busy svg{animation:pulse 1.1s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{opacity:.35}}
 #play{width:40px;height:40px;border-radius:50%;border:0;background:var(--info);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none}
 #play svg{width:18px;height:18px;fill:#fff}
 #timeBox{flex:1;min-width:0}
@@ -232,7 +233,7 @@ body.radar #bar{display:flex}
 
 <div id="tools">
   <button id="themeBtn" title="Tema: scuro / chiaro" aria-label="Tema: scuro / chiaro"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
-  <button id="radarBtn" title="Radar della pioggia" aria-label="Radar della pioggia"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6-6"/></svg></button>
+  <button id="radarBtn" title="Dove piove" aria-label="Dove piove"><svg viewBox="0 0 24 24"><path d="M7 15.5a4.2 4.2 0 0 1-.4-8.4 5.6 5.6 0 0 1 10.7 1.3 3.6 3.6 0 0 1-.3 7.1z"/><path d="M8.5 18.5l-1 2.5M12.5 18.5l-1 2.5M16.5 18.5l-1 2.5"/></svg></button>
   <button id="locate" title="Dove sono" aria-label="Dove sono"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
   <button id="searchBtn" title="Cerca un luogo" aria-label="Cerca un luogo"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
   <button id="tripBtn" title="Il mio viaggio" aria-label="Il mio viaggio"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17c6 0 2-10 8-10"/></svg></button>
