@@ -2107,7 +2107,8 @@ document.getElementById("labAdd").onclick = () => {
   labSave(); labRender();
 };
 document.getElementById("labSend").onclick = () => {
-  if (!labPlaces.length) return;
+  if (!labPlaces.length && marker) document.getElementById("labAdd").click();
+  if (!labPlaces.length) { placeInfo.textContent = "Cerca un luogo, scegline uno dall'elenco e premi «Aggiungi questo luogo»: poi potrai mandarlo al telefono."; return; }
   const chunks = []; for (let i = 0; i < labPlaces.length; i += 8) chunks.push(labPlacesPayload(labPlaces.slice(i, i + 8)));
   qrShow(chunks);
 };
