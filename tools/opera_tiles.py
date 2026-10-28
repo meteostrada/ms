@@ -15,7 +15,7 @@ import sys, os, io, json, math, time, datetime, shutil, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np, h5py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import piramide, atlante
+import piramide, atlante, clutter
 from PIL import Image
 from pyproj import Transformer
 from scipy.ndimage import map_coordinates
@@ -94,6 +94,11 @@ X0, X1, Y0, Y1 = tile_range()
 to_laea = Transformer.from_crs("EPSG:4326", "+proj=laea +lat_0=55 +lon_0=10 +x_0=1950000 +y_0=-2100000 +ellps=WGS84 +units=m", always_xy=True)
 NG = 256 * 2 ** Z
 
+def _laea_rc(lat, lon):
+    gx, gy = to_laea.transform(lon, lat)
+    return (-gy / 1000 - 0.5, gx / 1000 - 0.5)   # riga, colonna: lo stesso schema di tile_coords
+CLUTTER_CENTERS = [(*_laea_rc(la, lo), rad) for _, la, lo, rad in clutter.SITES]
+
 def tile_coords(x, y):
     px = x * 256 + (np.arange(256) + 0.5)
     py = y * 256 + (np.arange(256) + 0.5)
@@ -162,6 +167,9 @@ with ThreadPoolExecutor(3) as ex:
             print(" manca", t, e); continue
         rain, covered = to_rain(dbz)
         rain = despeckle(rain, covered)
+        rain, gone = clutter.suppress(rain, covered, CLUTTER_CENTERS)
+        if gone:
+            print("  echi fissi tolti (disturbi radar):", gone)
         name, cnt, size = make_tiles(t, rain, covered)
         print(f" {name}: {cnt} tessere, {size/1024:.0f} KB, pioggia>=0.3mm/h: {(rain>=0.3).sum()} celle")
 
