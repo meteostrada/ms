@@ -1,6 +1,6 @@
 # Informativa sulla privacy di MeteoStrada / MeteoStrada Privacy Policy
 
-*Ultimo aggiornamento / Last updated: 7 novembre 2026 / November 7, 2026*
+*Ultimo aggiornamento / Last updated: 10 novembre 2026 / November 10, 2026*
 
 > Pubblicato su https://meteostrada.github.io/ms/privacy.html (copia in `site/privacy.md` del repository del sito).
 
@@ -24,6 +24,7 @@ radente e simili) lungo il percorso che ricava dalla tua posizione. Mostra anche
 - **Impostazioni, luoghi salvati e traccia GPX scelta per un'escursione**: restano solo sul tuo telefono, nella
   memoria privata dell'app, e si cancellano disinstallando l'app. Se sul telefono è attivo il backup di Android,
   il sistema può includerli nel backup del tuo account Google, secondo le tue impostazioni di Android.
+- **Registro di diagnostica** (facoltativo, nelle impostazioni): un elenco con gli orari dei passaggi dell'app (movimento rilevato, primo GPS, controlli, testo degli avvisi), senza coordinate. Resta sul telefono, in memoria, e non viene inviato a nessuno: lo vedi solo tu e si azzera chiudendo l'app.
 - **Nessun account, nessuna pubblicità, nessuno strumento di statistiche o di segnalazione automatica degli errori.**
   I tuoi dati non vengono venduti né ceduti a terzi per scopi pubblicitari.
 
@@ -76,6 +77,7 @@ low sun and similar) along the route it infers from your location. It also shows
 - **Settings, saved places and the GPX track you pick for a hike** stay only on your phone, in the app's private
   storage, and are deleted when you uninstall the app. If Android backup is on, the system may include them in your
   Google account backup, according to your Android settings.
+- **Diagnostic log** (optional, in settings): a list with the times of the app's steps (movement detected, first GPS fix, checks, alert text), without coordinates. It stays on your phone, in memory, and is not sent to anyone: only you can see it and it is cleared when the app closes.
 - **No account, no ads, no analytics or automatic crash-reporting tools.** Your data is not sold or handed to third
   parties for advertising.
 
