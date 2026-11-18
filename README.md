@@ -18,6 +18,11 @@ Il codice dell'app Android/Desktop sta in un altro repository (privato).
 
 ## Accrocchi e limiti noti (da rivedere)
 
+- **Radar europeo dal deposito di riserva** · `tools/opera_tiles.py` (`BASES`).
+  Dall'11 novembre 2026 alle 20:05 UTC il deposito principale delle foto OPERA (CloudFerro, `openradar-24h`) e' vuoto per un guasto
+  del fornitore. EUMETNET pubblica le stesse foto in un deposito di riserva all'ECMWF (`openradar-24h-backup`, vedi la documentazione
+  Open Radar Data). Il programma prova prima il principale e poi la riserva: quando il principale torna, si riprende da solo.
+
 - **Disturbo fisso su Dublino (radar OPERA)** · `tools/clutter.py`, usato da `tools/opera_tiles.py`.
   Dal 28 ottobre 2026 il radar europeo mostrava su Dublino (53,32 N, 6,36 O) una macchia di 20-30 km con 30-100 mm/h ferma per ore,
   con tutto intorno asciutto e Open-Meteo senza pioggia: un disturbo, non un temporale. Causa vera **non nota** (echi fissi,

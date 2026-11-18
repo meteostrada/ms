@@ -20,7 +20,13 @@ from PIL import Image
 from pyproj import Transformer
 from scipy.ndimage import map_coordinates
 
-BASE = "https://s3.waw3-1.cloudferro.com/openradar-24h"
+# Dove si trovano le foto OPERA. Dall'11 novembre 2026 il deposito principale (CloudFerro) e' vuoto per un guasto del fornitore:
+# EUMETNET pubblica le stesse foto in un deposito di riserva all'ECMWF. Si prova il principale e, se non ha foto, la riserva.
+BASES = [
+    "https://s3.waw3-1.cloudferro.com/openradar-24h",
+    "https://object-store.os-api.cci1.ecmwf.int/openradar-24h-backup",
+]
+BASE = BASES[0]
 STEP = 5
 Z = 7
 SHIFT_DB = 6.0
@@ -39,15 +45,19 @@ def get(u):
         return r.read()
 
 def find_latest():
+    global BASE
     now = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
-    t = now.replace(minute=now.minute // STEP * STEP)
-    for _ in range(12):
-        try:
-            req = urllib.request.Request(url(t), method="HEAD", headers={"User-Agent": "MeteoStrada-sito"})
-            urllib.request.urlopen(req, timeout=30).close()
-            return t
-        except Exception:
-            t -= datetime.timedelta(minutes=STEP)
+    for base in BASES:
+        BASE = base
+        t = now.replace(minute=now.minute // STEP * STEP)
+        for _ in range(12):
+            try:
+                req = urllib.request.Request(url(t), method="HEAD", headers={"User-Agent": "MeteoStrada-sito"})
+                urllib.request.urlopen(req, timeout=30).close()
+                print("foto OPERA da:", base)
+                return t
+            except Exception:
+                t -= datetime.timedelta(minutes=STEP)
     return None
 
 def load(t):
