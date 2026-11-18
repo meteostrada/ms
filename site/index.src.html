@@ -15,6 +15,7 @@
   /* tema scuro (di partenza) */
   --bg:#0F1420; --surface:#1A2233; --surface2:#232D42; --card:#1A2233e6; --line:#ffffff22;
   --text:#F4F6FB; --text2:#9AA5BD; --text3:#C9D2E4; --info:#4FA3E3; --onaccent:#06121f;
+  --busy:#FF9F1C; --busytext:#FFC271; --busybg:#2B1B07f2; --busyglow:#FF9F1C55;
   --hover:#ffffff14; --thumb:#ffffff2a; --err:#ff9d8f; --bgfade:#0F1420cc;
   --about1:#141B2B; --store:#0B1019; --scrim:#070B14aa; --don1:#1B2438; --don2:#121926;
   color-scheme:dark;
@@ -23,6 +24,7 @@
 :root[data-theme="light1"]{
   --bg:#EEF2F7; --surface:#FFFFFF; --surface2:#F1F4F9; --card:#FFFFFFeb; --line:#0000001f;
   --text:#18212F; --text2:#5A6679; --text3:#38445A; --info:#2A7FCB; --onaccent:#FFFFFF;
+  --busy:#F26B0F; --busytext:#B1470A; --busybg:#FFF0DEf2; --busyglow:#F26B0F44;
   --hover:#00000010; --thumb:#0000002e; --err:#C0392B; --bgfade:#FFFFFFd9;
   --about1:#F7F9FC; --store:#FFFFFF; --scrim:#1B243366; --don1:#FFFFFF; --don2:#F1F4F9;
   color-scheme:light;
@@ -116,6 +118,20 @@ body.radar #bar{display:flex}
 #timeLabel b{font-size:18px}
 #timeLabel span{color:var(--text2);font-size:12px}
 #slider{width:100%;margin:6px 0 0;accent-color:var(--info);height:18px}
+/* Avviso "sto scaricando": una pillola arancione che pulsa, attaccata sopra la barra del film (dove si guarda mentre si preme play) */
+#busy{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);display:flex;align-items:center;gap:9px;
+  padding:7px 16px 7px 13px;border-radius:999px;white-space:nowrap;font:600 14px/1.2 system-ui,sans-serif;pointer-events:none;
+  color:var(--busytext);background:var(--busybg);border:1.5px solid var(--busy);
+  box-shadow:0 6px 18px #0005;animation:busyGlow 1.3s ease-in-out infinite}
+#busy[hidden]{display:none}
+#busy i{width:11px;height:11px;border-radius:50%;background:var(--busy);flex:none;animation:busyDot 1.3s ease-in-out infinite}
+#busy span{animation:busyText 1.3s ease-in-out infinite}
+#bar.busy{border-color:var(--busy);animation:busyBar 1.3s ease-in-out infinite}
+@keyframes busyDot{50%{transform:scale(.55);opacity:.4}}
+@keyframes busyText{50%{opacity:.6}}
+@keyframes busyGlow{50%{box-shadow:0 0 0 6px var(--busyglow),0 6px 18px #0005}}
+@keyframes busyBar{50%{box-shadow:0 0 0 3px var(--busyglow)}}
+@media (prefers-reduced-motion:reduce){#busy,#busy i,#busy span,#bar.busy{animation:none}}
 #now{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer;flex:none}
 #now[disabled]{opacity:.4;cursor:default}
 #tools{position:fixed;right:calc(var(--pw) + max(12px,env(safe-area-inset-right)));top:max(12px,env(safe-area-inset-top));z-index:3;display:flex;flex-direction:column;gap:8px}
@@ -338,6 +354,7 @@ body.labmode button.lab{display:inline-block}
 <div id="cov" class="card"></div>
 
 <div id="bar" class="card">
+  <div id="busy" role="status" aria-live="polite" hidden><i></i><span></span></div>
   <button id="play" aria-label="Avvia il film"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4.5v15l13-7.5z"/></svg></button>
   <div id="timeBox">
     <div id="timeLabel"><b id="tTime">--:--</b><span id="tRel">caricamento…</span></div>
@@ -1201,6 +1218,26 @@ async function updateCoverage() {
   else if (arr.radarPx < 20000) msg = arr.satPx > 20000 ? "Qui non c'è il radar: la pioggia è una stima da satellite, meno precisa e con circa mezz'ora di ritardo." : "Qui il radar copre solo in parte la zona.";
   el.textContent = msg; el.style.display = msg ? "block" : "none";
 }
+// Avviso "sto scaricando i dati del radar", vicino alla barra del film.
+// Due modi: un messaggio esplicito (setBusy) e uno automatico quando le tessere stanno arrivando da piu' di mezzo secondo
+// (cosi' non lampeggia per i caricamenti brevissimi).
+let busyManual = "", busyAuto = false, busySince = 0, busyUntil = 0;
+function renderBusy() {
+  const msg = busyManual || (busyAuto ? "Scarico i dati del radar…" : "");
+  const el = document.getElementById("busy");
+  el.hidden = !msg;
+  if (msg) el.querySelector("span").textContent = msg;
+  document.getElementById("bar").classList.toggle("busy", !!msg);
+}
+function setBusy(msg) { busyManual = msg || ""; renderBusy(); }
+function tickBusy(now) {
+  let work = false;
+  try { work = radarOn && (rainBusy.size > 0 || !!preparing); } catch { /* le variabili non sono ancora pronte */ }
+  if (work) { if (!busySince) busySince = now; if (now - busySince > 500) busyUntil = now + 900; }
+  else busySince = 0;
+  const a = now < busyUntil;
+  if (a !== busyAuto) { busyAuto = a; renderBusy(); }
+}
 let statusTimer = null;
 function setStatus(msg, ms) {
   const s = document.getElementById("status");
@@ -1263,6 +1300,7 @@ function draw() {
 }
 (function loop() {
   if (dirty) { dirty = false; draw(); }
+  tickBusy(performance.now());
   requestAnimationFrame(loop);
 })();
 
@@ -1353,7 +1391,7 @@ function play(on) {
   clearInterval(timer);
   if (!on) return;
   const go = () => {
-    setStatus("");
+    setStatus(""); setBusy("");
     if (!playing) return;
     if (cur >= frames.length - 1) showFrame(0);
     timer = setInterval(() => {
@@ -1362,7 +1400,7 @@ function play(on) {
     }, 550);
   };
   if (prepared === filmSignature()) { go(); return; }
-  setStatus("Aggiorno il radar…");
+  setBusy("Aggiorno il radar…");
   prepareFilm().then(go, go);
 }
 playBtn.onclick = () => play(!playing);
@@ -2041,11 +2079,12 @@ loadMap().catch(e => setStatus("Mappa non caricata"));
 const radarBtn = document.getElementById("radarBtn");
 async function radarStart() {
   radarOn = true; radarBtn.classList.add("on", "busy"); document.body.classList.add("radar");
-  setStatus("Carico il radar…");
+  setBusy("Carico il radar…");
   euReady = Promise.all([loadEuManifest(), loadNoaaManifest()]);
   await euReady;
   await refresh(true);
   radarBtn.classList.remove("busy");
+  setBusy("");
   if (!radarOn) return;
   if (frames.length) setStatus("");
   radarTimers = [
@@ -2054,7 +2093,7 @@ async function radarStart() {
 }
 function radarStop() {
   radarOn = false; play(false); radarTimers.forEach(clearInterval); radarTimers = [];
-  frames = []; cur = 0; setStatus("");
+  frames = []; cur = 0; setStatus(""); setBusy("");
   radarBtn.classList.remove("on", "busy"); document.body.classList.remove("radar"); dirty = true;
 }
 radarBtn.onclick = () => { if (radarOn) radarStop(); else radarStart(); };
