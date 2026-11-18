@@ -1220,7 +1220,7 @@ async function updateCoverage() {
 }
 // Avviso "sto scaricando i dati del radar", vicino alla barra del film.
 // Due modi: un messaggio esplicito (setBusy) e uno automatico quando le tessere stanno arrivando da piu' di mezzo secondo
-// (cosi' non lampeggia per i caricamenti brevissimi).
+// (cosi' non lampeggia per i caricamenti brevissimi). Vale solo per il fotogramma visibile, non per il film in preparazione.
 let busyManual = "", busyAuto = false, busySince = 0, busyUntil = 0;
 function renderBusy() {
   const msg = busyManual || (busyAuto ? "Scarico i dati del radar…" : "");
@@ -1232,7 +1232,14 @@ function renderBusy() {
 function setBusy(msg) { busyManual = msg || ""; renderBusy(); }
 function tickBusy(now) {
   let work = false;
-  try { work = radarOn && (rainBusy.size > 0 || !!preparing); } catch { /* le variabili non sono ancora pronte */ }
+  // Conta solo le tessere del fotogramma che si sta guardando: la preparazione in background degli altri
+  // fotogrammi del film non deve tenere acceso l'avviso (su telefoni lenti durava a lungo anche a immagine completa).
+  try {
+    if (radarOn && frames.length) {
+      const pre = frames[cur] + "|";
+      for (const k of rainBusy.keys()) { if (k.startsWith(pre)) { work = true; break; } }
+    }
+  } catch { /* le variabili non sono ancora pronte */ }
   if (work) { if (!busySince) busySince = now; if (now - busySince > 500) busyUntil = now + 900; }
   else busySince = 0;
   const a = now < busyUntil;
